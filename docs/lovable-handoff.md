@@ -169,3 +169,9 @@ const response = await fetch(`${apiBase}/v1/auth/login`, {
 详情“操作记录”仅在 audit.read 时可见，其内容明确标注当前 Bot 范围；服务端尚无用户级审计过滤，不做前端全量过滤或伪造用户归属。全局 auth.* 安全日志、有效邀请指标和 CSV 导出仍无本批接入接口。列表/count/汇总是独立实时请求，不构成跨请求数据库快照，并发业务变化时数值可能短暂不同。
 
 所有 Telegram 语言解析继续由后端决定，中文后台只展示偏好、Telegram 语言及后端解析结果，不更新语言回退规则。生产入口没有 Mock，测试 fixtures 仅在组件测试和隔离端到端测试服务中使用。下一批必须先明确对应 API 和权限边界，再扩展新模块。
+
+## 第二阶段第 3 批后端：Dashboard 运营统计
+
+新增只读 summary/trends，接入必须以 [Dashboard API 契约](dashboard-api.md) 为准。前端只展示服务端聚合，不遍历明细计算指标。使用 dashboard.read 和明确单个 Brand/Bot 范围。
+
+006 的 Brand timezone 与 Bot 可选覆盖须先由业务负责人明确配置，未配置接口返回 dashboard_timezone_not_configured；禁止 UI 静默使用浏览器或服务器时区。实时总余额/档案总数与期间指标必须分区展示。DAU、有效邀请、交付成功等不支持项明确标记，不能假 0。兑换状态为区间创建订单的当前状态，并非期间状态变化或真实成功交付数量。本批没有改动 UI 或核心业务服务。

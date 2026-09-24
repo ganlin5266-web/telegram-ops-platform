@@ -30,7 +30,7 @@ async function fixture() {
 const credit=(s:Scope,userId:string,event='credit',delta='100')=>db.transaction(tx=>postPoints(tx,{...s,userId,delta,source:'test',businessType:'test',businessId:event,idempotencyKey:event}));
 async function rule(s:Scope) {return one(db,`INSERT INTO redemption_rules(brand_id,bot_id,name,mode,points_cost,exchange_rate,enabled) VALUES($1,$2,'Test','fixed',10,1,true) RETURNING *`,[s.brandId,s.botId]);}
 async function start(botId:string,id:number,userId:number,text='/start') {return handleUpdate(db,botId,'test-secret',{update_id:id,message:{from:{id:userId,first_name:'Test',language_code:'es'},text}},()=> 'test-secret');}
-test('migration replay is safe',async()=>{await migrate(db);assert.equal((await db.query('SELECT * FROM schema_migrations')).rows.length,5);});
+test('migration replay is safe',async()=>{await migrate(db);assert.equal((await db.query('SELECT * FROM schema_migrations')).rows.length,6);});
 test('duplicate updates process once, repeated starts preserve one identity',async()=>{
  const {s}=await fixture();const results=await Promise.all([start(s.botId,1,777),start(s.botId,1,777)]);
  assert.equal(results.filter(r=>r.duplicate).length,1);await start(s.botId,2,777);

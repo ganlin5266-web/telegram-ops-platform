@@ -76,8 +76,8 @@ test('browser: anonymous and fixed bearer callers cannot access me or existing u
  assert.equal((await f.app.inject({url:'/v1/me',headers:{authorization:`Bearer ${randomUUID()}`}})).statusCode,401);
 });
 test('browser: me returns real identity, zh-CN and scoped grants; effective permissions match DB',async()=>{
- const f=await fixture();const s=await session(f);const me=(await f.get('/v1/me',s.cookie)).json();assert.equal(me.id,f.admin.id);assert.equal(me.uiLanguage,'zh-CN');assert.equal(me.grants[0].role,'Viewer');assert.deepEqual(me.grants[0].permissions,['users.read']);
- const effective=await f.get(`/v1/me/permissions?brandId=${f.brand.id}&botId=${f.a1.id}`,s.cookie);assert.deepEqual(effective.json().permissions,['users.read']);
+ const f=await fixture();const s=await session(f);const me=(await f.get('/v1/me',s.cookie)).json();assert.equal(me.id,f.admin.id);assert.equal(me.uiLanguage,'zh-CN');assert.equal(me.grants[0].role,'Viewer');assert.deepEqual(me.grants[0].permissions,['dashboard.read','users.read']);
+ const effective=await f.get(`/v1/me/permissions?brandId=${f.brand.id}&botId=${f.a1.id}`,s.cookie);assert.deepEqual(effective.json().permissions,['dashboard.read','users.read']);
  assert.equal((await f.get(`/v1/me/permissions?brandId=${f.brand.id}&botId=${f.a2.id}`,s.cookie)).statusCode,403);
 });
 test('browser: logout revokes session server-side and emits login/logout audit',async()=>{
@@ -100,7 +100,7 @@ test('browser: Viewer reads scoped users and points, cannot adjust',async()=>{
  const points=await f.get(`${f.base}/users/${f.users[0]!.id}/points`,s.cookie);assert.equal(points.json().balance,'0');assert.equal((await adjust(f,s)).statusCode,403);
 });
 test('browser: Operator gets existing permissions and cannot adjust points',async()=>{
- const f=await fixture('Operator'),s=await session(f);const result=(await f.get(`/v1/me/permissions?brandId=${f.brand.id}&botId=${f.a1.id}`,s.cookie)).json();assert.deepEqual(result.permissions,['activities.manage','messages.publish','users.read']);assert.equal((await adjust(f,s)).statusCode,403);
+ const f=await fixture('Operator'),s=await session(f);const result=(await f.get(`/v1/me/permissions?brandId=${f.brand.id}&botId=${f.a1.id}`,s.cookie)).json();assert.deepEqual(result.permissions,['activities.manage','dashboard.read','messages.publish','users.read']);assert.equal((await adjust(f,s)).statusCode,403);
 });
 test('browser: brand Admin sees sibling bots and can adjust within brand only',async()=>{
  const f=await fixture('Admin','brand'),s=await session(f);const bots=(await f.get(`/v1/me/brands/${f.brand.id}/bots`,s.cookie)).json().items;
@@ -198,4 +198,13 @@ test('browser: IP rate limit cannot be bypassed with a forwarded IP header',asyn
  await db.query('INSERT INTO admin_login_limits(bucket_hash,attempts) VALUES($1,50)',[bucket]);
  const response=await f.app.inject({method:'POST',url:'/v1/auth/login',remoteAddress:f.remoteAddress,headers:{...f.headers,'x-forwarded-for':'203.0.113.10'},payload:{login:f.login,password}});assert.equal(response.statusCode,429);
  assert.equal((await db.query('SELECT id FROM admin_sessions WHERE admin_id=$1',[f.admin.id])).rows.length,0);
+});
+
+ test('browser: Dashboard uses real session, scoped permission and no-store response',async()=>{
+ const f=await fixture('Viewer','bot',true),s=await session(f);
+ await db.query("UPDATE brands SET timezone='UTC' WHERE id=$1",[f.brand.id]);
+ const url=`${f.base}/dashboard/summary?from=2025-01-01T00:00:00Z&to=2025-01-02T00:00:00Z`;
+ assert.equal((await f.get(url)).statusCode,401);
+ const r=await f.get(url,s.cookie);assert.equal(r.statusCode,200,r.body);assert.equal(r.json().realtime.totalUsers,1);assert.equal(r.headers['cache-control'],'no-store');
+ await db.query('DELETE FROM admin_roles WHERE admin_id=$1',[f.admin.id]);assert.equal((await f.get(url,s.cookie)).statusCode,403);
 });

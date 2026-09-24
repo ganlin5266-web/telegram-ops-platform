@@ -6,6 +6,7 @@ import {authorize,type Authenticator} from './auth.js';
 import {postPoints} from './points.js';
 import {getTemplate} from './language.js';
 import {attachBrowserAuth,type BrowserAuthConfig} from './browser-auth.js';
+import {attachDashboard} from './dashboard.js';
 import {attachOperationsQueries} from './operations-queries.js';
 import type {FastifyRequest} from 'fastify';
 const scopeSchema=z.object({brandId:z.uuid(),botId:z.uuid()});
@@ -31,6 +32,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  });
  const base='/v1/brands/:brandId/bots/:botId';
  attachOperationsQueries(app,db,authenticateRequest);
+ attachDashboard(app,db,authenticateRequest);
  app.get(`${base}/users/:userId/points`,async request=>{
   const s=scopeSchema.extend({userId:z.uuid()}).parse(request.params),p=await authenticateRequest(request);
   return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');await one(tx,'SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND id=$3',[...scopeParams(s),s.userId]);
