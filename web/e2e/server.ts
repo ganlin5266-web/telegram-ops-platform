@@ -74,6 +74,15 @@ for (const name of ["验收品牌 A", "验收品牌 B"]) {
           `${botName} 用户 ${index}`,
         ],
       );
+    const inviter = await one(
+      db,
+      "SELECT id FROM telegram_users WHERE bot_id=$1 AND telegram_user_id=5000000000",
+      [bot.id],
+    );
+    await db.query(
+      "INSERT INTO referrals(brand_id,bot_id,inviter_id,invitee_id,start_parameter) SELECT brand_id,bot_id,$2,id,'isolated-ui-acceptance' FROM telegram_users WHERE bot_id=$1 AND id<>$2",
+      [bot.id, inviter.id],
+    );
   }
 }
 const app = createApp(

@@ -7,6 +7,7 @@ export class ApiError extends Error {
   }
 }
 export function message(status: number, code = ""): string {
+  if (code === "invalid_cursor") return "查询条件已变化，请重新加载。";
   if (code === "invalid_credentials") return "登录信息错误或账号不可用";
   if (code === "csrf_failed") return "安全验证已失效，请重新登录后操作";
   if (["origin_not_allowed", "origin_required", "cors_denied"].includes(code))

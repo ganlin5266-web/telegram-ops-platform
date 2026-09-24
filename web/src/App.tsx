@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, json, operation, request, type Operation } from "./api";
+import UsersCenter from "./operations/UsersCenter";
+import {
+  UserOverview,
+  PointSummary,
+  LedgerPanel,
+  ReferralPanel,
+  AuditPanel,
+} from "./operations/panels";
 type Me = { displayName: string; uiLanguage: string; csrfToken: string };
 type Brand = {
   brandId: string;
@@ -42,11 +50,10 @@ export default function App() {
   const [page, setPage] = useState("overview"),
     [drawer, setDrawer] = useState(false),
     [permissions, setPermissions] = useState<string[]>([]);
-  const [users, setUsers] = useState<User[]>([]),
-    [cursors, setCursors] = useState<(string | null)[]>([null]),
-    [next, setNext] = useState<string | null>(null),
-    [loading, setLoading] = useState(false),
+  const [loading, setLoading] = useState(false),
     [scopeError, setScopeError] = useState("");
+  const [detailTab, setDetailTab] = useState("points"),
+    [pointsRevision, setPointsRevision] = useState(0);
   const [selected, setSelected] = useState<User | null>(null),
     [balance, setBalance] = useState<string | null>(null),
     [pointBusy, setPointBusy] = useState(false),
@@ -78,10 +85,7 @@ export default function App() {
   function clearScope() {
     generation.current++;
     clearDetails();
-    setUsers([]);
     setPermissions([]);
-    setNext(null);
-    setCursors([null]);
     setScopeError("");
   }
   function expire() {
@@ -193,34 +197,11 @@ export default function App() {
       active = false;
     };
   }, [me, brand, bot]);
-  async function loadUsers(history: (string | null)[] = cursors) {
-    const version = generation.current;
-    setLoading(true);
-    setScopeError("");
-    setUsers([]);
-    clearDetails();
-    try {
-      const after = history.at(-1);
-      const r = await request<{ items: User[]; nextCursor: string | null }>(
-        `${base}/users?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`,
-      );
-      if (version !== generation.current) return;
-      setUsers(r.items);
-      setNext(r.nextCursor);
-      setCursors(history);
-    } catch (e) {
-      if (version === generation.current) failed(e, setScopeError);
-    } finally {
-      if (version === generation.current) setLoading(false);
-    }
-  }
-  useEffect(() => {
-    if (page === "users" && bot && permissions.includes("users.read"))
-      void loadUsers([null]);
-  }, [page, bot, permissions]);
-  async function points(user: User) {
+  async function points(user: User, tab = "points") {
     clearDetails();
     setSelected(user);
+    setDetailTab(tab);
+    setPointsRevision(0);
     const version = detailGeneration.current;
     setPointBusy(true);
     try {
@@ -251,6 +232,7 @@ export default function App() {
       });
       if (version !== detailGeneration.current) return;
       setPending(null);
+      setPointsRevision((x) => x + 1);
       setResult("积分调整成功，服务端已记录流水。");
       setBalance(null);
       setDelta("");
@@ -590,101 +572,30 @@ export default function App() {
             !permissions.includes("users.read") ? (
             <section className="empty">你没有权限查看当前 Bot 用户。</section>
           ) : bot && permissions.includes("users.read") ? (
-            <section className="panel">
-              <div className="table-title">
-                <h3>
-                  用户档案 <span className="badge">{currentBot?.name}</span>
-                </h3>
-                <button disabled={loading} onClick={() => void loadUsers()}>
-                  刷新
-                </button>
-              </div>
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      {[
-                        "用户 / Telegram ID",
-                        "Username",
-                        "语言",
-                        "首次启动",
-                        "最后互动",
-                        "状态",
-                        "操作",
-                      ].map((x) => (
-                        <th key={x}>{x}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <tr key={u.id}>
-                        <td>
-                          <strong>
-                            {[u.first_name, u.last_name]
-                              .filter(Boolean)
-                              .join(" ") || "未提供姓名"}
-                          </strong>
-                          <small>{u.telegram_user_id}</small>
-                        </td>
-                        <td>{u.username ? `@${u.username}` : "—"}</td>
-                        <td>
-                          {u.preferred_language ||
-                            u.telegram_language_code ||
-                            "暂无数据"}
-                        </td>
-                        <td>{date(u.first_started_at)}</td>
-                        <td>{date(u.last_interaction_at)}</td>
-                        <td>
-                          <span className="badge">{u.status}</span>
-                        </td>
-                        <td>
-                          <button onClick={() => void points(u)}>
-                            查看积分
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {!users.length && !loading && !scopeError && (
-                <div className="empty">当前批次暂无用户</div>
-              )}
-              <div className="pagination">
-                <small>每批最多 50 条 · 按服务端游标读取</small>
-                <div>
-                  <button
-                    disabled={loading || cursors.length === 1}
-                    onClick={() => void loadUsers(cursors.slice(0, -1))}
-                  >
-                    上一批
-                  </button>
-                  <button
-                    disabled={loading || !next}
-                    onClick={() => void loadUsers([...cursors, next])}
-                  >
-                    下一批
-                  </button>
-                </div>
-              </div>
-            </section>
+            <UsersCenter
+              key={base}
+              base={base}
+              botName={currentBot?.name || ""}
+              onSelect={(user, tab) => void points(user, tab)}
+              onInvalidate={clearDetails}
+              onExpire={expire}
+            />
           ) : null}
         </main>
         <footer>
-          Telegram Operations Platform <span>第一批 · 用户与积分工作台</span>
+          Telegram Operations Platform <span>第二批 · 用户运营中心</span>
         </footer>
       </div>
       {selected && (
         <div className="detail-overlay">
           <section
-            className="detail"
+            className="detail operations-detail"
             role="dialog"
             aria-modal="true"
-            aria-label="用户积分"
+            aria-label="用户详情"
           >
             <div className="table-title">
-              <h2>用户积分</h2>
+              <h2>用户详情</h2>
               <button
                 aria-label="关闭详情"
                 disabled={sending}
@@ -713,6 +624,60 @@ export default function App() {
               <span>当前积分余额</span>
               <strong>{pointBusy ? "读取中…" : (balance ?? "暂无数据")}</strong>
             </div>
+            <PointSummary
+              key={`${base}/${selected.id}`}
+              base={base}
+              userId={selected.id}
+              revision={pointsRevision}
+              onExpire={expire}
+            />
+            <div className="tabs" role="tablist" aria-label="用户详情栏目">
+              {[
+                ["overview", "概览"],
+                ["points", "积分"],
+                ["referrals", "邀请"],
+                ...(permissions.includes("audit.read")
+                  ? [["audit", "操作记录"]]
+                  : []),
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  role="tab"
+                  aria-selected={detailTab === id}
+                  onClick={() => setDetailTab(id!)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {detailTab === "overview" && (
+              <UserOverview
+                key={`${base}/${selected.id}`}
+                base={base}
+                userId={selected.id}
+                onExpire={expire}
+              />
+            )}
+            {detailTab === "points" && (
+              <LedgerPanel
+                key={`${base}/${selected.id}`}
+                base={base}
+                userId={selected.id}
+                revision={pointsRevision}
+                onExpire={expire}
+              />
+            )}
+            {detailTab === "referrals" && (
+              <ReferralPanel
+                key={`${base}/${selected.id}`}
+                base={base}
+                userId={selected.id}
+                onExpire={expire}
+              />
+            )}
+            {detailTab === "audit" && permissions.includes("audit.read") && (
+              <AuditPanel key={base} base={base} onExpire={expire} />
+            )}
             {alert(pointError)}
             {pointError && !pending && (
               <button onClick={() => void points(selected)}>
@@ -724,7 +689,8 @@ export default function App() {
                 {result}
               </div>
             )}
-            {permissions.includes("points.adjust") &&
+            {detailTab === "points" &&
+              permissions.includes("points.adjust") &&
               balance !== null &&
               !result && (
                 <form

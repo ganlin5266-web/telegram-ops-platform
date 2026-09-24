@@ -664,3 +664,238 @@ footer {
     box-shadow: -5px 0 8px #24324808;
   }
 }
+/* User operations center: public query controls and independently loaded details. */
+.tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid #e8edf4;
+  margin-bottom: 24px;
+  padding-bottom: 10px;
+  overflow: auto;
+}
+.tabs button {
+  border: 0;
+  color: #7b8799;
+  white-space: nowrap;
+}
+.tabs .selected,
+.tabs [aria-selected="true"] {
+  background: #edf2ff;
+  color: #325be4;
+  font-weight: 600;
+}
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0 22px;
+  padding: 20px;
+  background: #f7f9fc;
+  border: 1px solid #e9edf4;
+  border-radius: 8px;
+}
+.filter-grid label {
+  font-size: 12px;
+  color: #7a8799;
+}
+.filter-grid input,
+.filter-grid select {
+  margin: 8px 0 0;
+  height: 39px;
+  font-size: 12px;
+  min-width: 0;
+}
+.filter-grid > button {
+  align-self: end;
+  height: 39px;
+}
+.filter-grid > small {
+  grid-column: 1/-1;
+}
+.search-label {
+  max-width: 540px;
+  color: #65758d;
+}
+.search-label input {
+  margin-bottom: 0;
+}
+.result-count {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  margin: 22px 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.result-count small {
+  font-weight: 400;
+}
+.operations-detail {
+  width: min(850px, 100%);
+}
+.operations-detail .balance {
+  margin: 18px 0 10px;
+}
+.point-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.point-summary > div {
+  border: 1px solid #e4eaf2;
+  border-radius: 8px;
+  padding: 15px;
+  background: #fcfdff;
+}
+.point-summary strong {
+  display: block;
+  font-size: 20px;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.summary-section > p {
+  font-size: 11px;
+  line-height: 1.8;
+}
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.profile-grid > div {
+  min-width: 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf1f6;
+}
+.profile-grid dt {
+  font-size: 11px;
+  color: #8c97a7;
+}
+.profile-grid dd {
+  margin: 8px 0 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.query-panel {
+  margin: 20px 0 28px;
+}
+.query-panel .compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.note-cell {
+  white-space: normal;
+  min-width: 180px;
+  max-width: 300px;
+  overflow-wrap: anywhere;
+}
+.credit,
+.credit strong {
+  color: #258567;
+}
+.debit,
+.debit strong {
+  color: #bd5656;
+}
+.inviter-card {
+  background: #f7f9fc;
+  border: 1px solid #e5eaf3;
+  border-radius: 8px;
+  padding: 18px;
+  margin: 18px 0;
+}
+.inviter-card > small {
+  display: block;
+}
+.row-actions button + button {
+  margin-left: 6px;
+}
+.mobile-filter-button {
+  display: none;
+}
+.filters-overlay {
+  position: fixed;
+  inset: 0;
+  background: #17223866;
+  z-index: 25;
+  display: flex;
+  align-items: flex-end;
+}
+.filters-sheet {
+  width: 100%;
+  max-height: 90vh;
+  background: white;
+  padding: 24px 16px;
+  overflow: auto;
+  border-radius: 16px 16px 0 0;
+}
+.filters-sheet .filter-grid {
+  padding: 12px;
+}
+.filters-sheet .table-title {
+  position: sticky;
+  top: 0;
+  background: white;
+  padding: 10px 0;
+  z-index: 1;
+}
+.query-panel .alert button {
+  margin-left: 12px;
+}
+.user-center .alert button {
+  margin-left: 12px;
+}
+@media (max-width: 1000px) {
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .filter-desktop {
+    display: none;
+  }
+  .mobile-filter-button {
+    display: block;
+    margin: 18px 0;
+  }
+  .result-count {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .operations-detail {
+    width: 100%;
+    padding: 20px 16px;
+  }
+  .point-summary {
+    gap: 10px;
+  }
+  .point-summary strong {
+    font-size: 17px;
+  }
+  .query-panel .filter-grid {
+    padding: 12px;
+    gap: 12px;
+  }
+  .profile-grid {
+    gap: 12px;
+  }
+  .row-actions button {
+    display: block;
+    font-size: 11px;
+    padding: 7px;
+  }
+  .row-actions button + button {
+    margin-left: 0;
+    margin-top: 5px;
+  }
+  .operations-detail td:last-child,
+  .operations-detail th:last-child {
+    position: static;
+    box-shadow: none;
+  }
+  .filters-sheet .filter-grid {
+    grid-template-columns: 1fr;
+  }
+  .filters-sheet .table-title {
+    gap: 10px;
+  }
+}
