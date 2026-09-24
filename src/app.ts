@@ -6,6 +6,7 @@ import {authorize,type Authenticator} from './auth.js';
 import {postPoints} from './points.js';
 import {getTemplate} from './language.js';
 import {attachBrowserAuth,type BrowserAuthConfig} from './browser-auth.js';
+import {attachOperationsQueries} from './operations-queries.js';
 import type {FastifyRequest} from 'fastify';
 const scopeSchema=z.object({brandId:z.uuid(),botId:z.uuid()});
 export function createApp(db:Database,secrets:SecretProvider,authenticate:Authenticator,browserAuth?:BrowserAuthConfig) {
@@ -29,12 +30,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
   return handleUpdate(db,botId,typeof header==='string'?header:undefined,request.body,secrets);
  });
  const base='/v1/brands/:brandId/bots/:botId';
- app.get(`${base}/users`,async request=>{
-  const s=scopeSchema.parse(request.params),p=await authenticateRequest(request);
-  const query=z.object({limit:z.coerce.number().int().min(1).max(100).default(50),after:z.uuid().optional()}).parse(request.query);
-  return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');
-   const result=await tx.query(`SELECT id,telegram_user_id::text,username,first_name,last_name,telegram_language_code,preferred_language,first_started_at,last_interaction_at,status FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND ($3::uuid IS NULL OR id>$3) ORDER BY id LIMIT $4`,[...scopeParams(s),query.after??null,query.limit]);return {items:result.rows,nextCursor:result.rows.length===query.limit?result.rows.at(-1)?.id:null};});
- });
+ attachOperationsQueries(app,db,authenticateRequest);
  app.get(`${base}/users/:userId/points`,async request=>{
   const s=scopeSchema.extend({userId:z.uuid()}).parse(request.params),p=await authenticateRequest(request);
   return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');await one(tx,'SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND id=$3',[...scopeParams(s),s.userId]);

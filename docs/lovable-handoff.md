@@ -147,3 +147,15 @@ const response = await fetch(`${apiBase}/v1/auth/login`, {
 当前实现不持久化品牌/Bot ID、不保存身份令牌或 CSRF 到 Storage。登录恢复时重新读取 `/me`、授权及品牌；切换时失效旧请求、清空列表及详情。分页使用 `limit=50/after` 和本地游标历史，不展示虚构总条数。后台 UI 固定中文，不写任何用户、Bot 或模板语言。
 
 今后扩展应先补相应服务端 API，再增加前端路由；不要解禁核心表直写。前端测试 fixtures 和 `web/e2e/server.ts` 仅用于隔离验收，不得导入生产入口或用于正式账号初始化。
+
+## 第二阶段第 2 批后端：用户运营查询
+
+已新增数据库侧用户搜索/筛选/排序、独立精确 count、用户详情、积分汇总/流水、邀请关系和范围审计查询。**完整接入契约、请求与响应示例、字段类型、错误码、权限、游标规则及指标口径见 [用户运营查询 API](operations-query-api.md)**，后续 Lovable 第 2 批 UI 必须按此文档接入；本轮没有开发该 UI。
+
+- 现有 `/users` 的 items 字段和 nextCursor 结构保持兼容；默认 id ASC，仍用 limit/after。新增游标为签名不透明字符串，筛选或排序变化必须重开首批；旧 UUID cursor 返回 400，清空重试。
+- `/users/count` 单独请求，不应每翻一页重新 COUNT。q 是 ID 精确/名称前缀搜索，language 必须明确 telegram/preferred 来源，不能当成最终发送语言筛选。
+- 用户详情、`points/summary`、`point-ledger`、用户/范围 `referrals` 使用当前范围 users.read；`audit-logs` 使用新 audit.read，Viewer/Operator 没有默认审计权限。
+- 所有积分、Telegram ID、total、invitedCount 都为字符串。累计获得含退款等所有正流水，累计消耗为全部负流水绝对值；不自行重新解释历史业务。
+- **有效邀请暂不能作为正式指标**。status/rewardStatus 仅为现有事实；不得新增重绑入口。
+- Audit 不返回原始 before/after、note、IP 或认证标识；没有范围的 auth.* 安全日志不混入某个 Bot。
+- `QUERY_CURSOR_SECRET` 只在服务端配置，不得使用 VITE_ 前缀，不得进入前端或 Git。新增 005 Migration 只增加只读权限和查询索引，001–004 原样保留。
