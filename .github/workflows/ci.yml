@@ -1,0 +1,57 @@
+name: core-ci
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          # Disposable localhost-only CI database, never a production credential.
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: telegram_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Secret scan
+        run: node scripts/scan-secrets.mjs
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: PGlite baseline (PostgreSQL-only cases explicitly skip)
+        run: |
+          set -o pipefail
+          npm test | tee /tmp/pglite-tests.log
+      - name: PostgreSQL 17 version and migration replay
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/telegram_test
+        run: |
+          node --input-type=module -e 'import pg from "pg"; const c=new pg.Client({connectionString:process.env.DATABASE_URL}); await c.connect(); const r=await c.query("SHOW server_version_num"); console.log("PostgreSQL server_version_num:",r.rows[0].server_version_num,"Node:",process.version); if(Math.floor(Number(r.rows[0].server_version_num)/10000)!==17) throw Error("PostgreSQL 17 required"); await c.end();'
+          node --import tsx src/migrate.ts
+          node --import tsx src/migrate.ts
+      - name: Real PostgreSQL 17 baseline and multi-connection acceptance
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/telegram_test
+        run: |
+          set -o pipefail
+          npm test | tee /tmp/postgres17-tests.log
+      - name: Preserve test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-test-evidence
+          path: /tmp/*-tests.log
+          if-no-files-found: warn
