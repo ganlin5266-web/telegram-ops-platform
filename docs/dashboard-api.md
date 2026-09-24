@@ -80,3 +80,16 @@
 新增 tests/dashboard.test.ts，真实 PG17 CI 与 PGlite 均执行。主 Bot 10,000 用户、32,000 Ledger、9,999 Referral、10,000 Redemption，另有同 Brand Bot、不同 Brand Bot 和空 Bot。所有账户通过真实 Ledger trigger 入账。测试数据 success/cancelled 仅验证 Schema 记录投影，不能视为生产交付功能。
 
 日志 `DASHBOARD_PERF` 逐项记录 1/7/30/90 天 summary/trends：dbMs 为数据库聚合+事务往返时间（不含 HTTP/RBAC），apiMs 为 Fastify inject 含鉴权和序列化的总时间（不含公网延迟），bytes 为 JSON 字节数。CI artifacts 保存本次精确性能记录。性能不依赖复杂缓存，单次测试的暖缓存结果不是并发压测或线上 SLA。
+
+### PostgreSQL 17 首次实测记录
+
+GitHub Actions run `36062733652`，Node 22.23.2 / PostgreSQL 17.11，以上主 Bot 数据规模。Dashboard 专项通过；该轮整体因原有 PG 验收仍断言 5 个 Migration 而失败，随后仅修正为 6。下面是实际测量，后续成功验收日志也会保留，不能当作生产性能承诺。
+
+| 天数 | Summary DB / API ms / bytes | Trends DB / API ms / bytes |
+|---|---|---|
+| 1 | 11.54 / 9.60 / 1105 | 3.71 / 5.16 / 749 |
+| 7 | 11.21 / 12.81 / 1122 | 6.98 / 11.23 / 1457 |
+| 30 | 16.57 / 18.53 / 1134 | 12.89 / 16.48 / 4171 |
+| 90 | 30.77 / 37.00 / 1149 | 35.43 / 33.91 / 11251 |
+
+DB 与 API 各自独立执行计时，暖缓存及调度波动可能使后一次 API 比前一次 DB 计时更短。本次最大范围毫秒级、返回约 11KB，因此保留 90 日上限，不引入缓存。
