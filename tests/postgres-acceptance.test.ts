@@ -137,7 +137,7 @@ pgTest('PG17 locks: FOR UPDATE visibly blocks another backend until commit',asyn
  assert.equal(secondDone,true);
 });
 pgTest('PG17 transactions: migration replay, constraints, triggers, rollback and ON CONFLICT',async()=>{
- await migrate(db);await migrate(db);assert.equal((await db.query('SELECT * FROM schema_migrations')).rows.length,4);
+ await migrate(db);await migrate(db);assert.equal((await db.query('SELECT * FROM schema_migrations')).rows.length,5);
  const {s,user}=await fixture();const ledger=await points(db,s,user.id,'seed');
  await assert.rejects(()=>db.transaction(async tx=>{await postPoints(tx,{...s,userId:user.id,delta:'7',source:'acceptance',businessType:'acceptance',businessId:'rollback',idempotencyKey:'rollback'});throw new Error('rollback_probe');}),/rollback_probe/);
  await consistent(s,'100');
