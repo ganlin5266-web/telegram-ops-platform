@@ -54,3 +54,9 @@ src/
 唯一主代码仓库：[ganlin5266-web/telegram-ops-platform](https://github.com/ganlin5266-web/telegram-ops-platform)。本轮仅进行第一阶段代码入库和 PostgreSQL 17 CI 验收；不进入第二阶段。实际验收以 Actions 对应 commit 的日志为准。
 
 第二阶段第 1 批已新增登录、退出、当前身份/权限和授权品牌/Bot发现；原有用户/余额 API 复用 Session 认证及既有 RBAC。详细浏览器接入协议见 [Lovable 交接](docs/lovable-handoff.md)。未制作 UI、未接正式 Bot、未部署生产。
+
+## 第二阶段第 1 批 UI
+
+现已在同仓库 `web/` 增加中文运营工作台：登录、总览、授权品牌/Bot切换、Telegram用户游标列表、余额及人工调整积分。前面的“未制作 UI”描述是后端前置批次的历史范围。后端核心服务和 001–004 Migration 不变；未接正式 Bot，未部署生产。运行与测试见 [前端说明](web/README.md)。
+
+CI 保留原有 PostgreSQL 17 的 58 项后端验收，增加前端构建、组件测试和真实 API 浏览器验收；结果以当前提交 Actions 日志为准。

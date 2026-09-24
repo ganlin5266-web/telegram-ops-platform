@@ -25,6 +25,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
       - name: Secret scan
         run: node scripts/scan-secrets.mjs
       - name: Install locked dependencies
@@ -48,6 +51,22 @@ jobs:
         run: |
           set -o pipefail
           npm test | tee /tmp/postgres17-tests.log
+      - name: Install frontend locked dependencies
+        run: npm --prefix web ci
+      - name: Frontend build
+        run: npm --prefix web run build
+      - name: Frontend component acceptance
+        run: |
+          set -o pipefail
+          npm --prefix web test | tee /tmp/frontend-tests.log
+      - name: Install Chromium for browser acceptance
+        run: cd web && npx playwright install --with-deps chromium
+      - name: Real API browser acceptance against PostgreSQL 17
+        env:
+          TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/telegram_test
+        run: |
+          set -o pipefail
+          npm --prefix web run test:e2e | tee /tmp/browser-tests.log
       - name: Preserve test evidence
         if: always()
         uses: actions/upload-artifact@v4

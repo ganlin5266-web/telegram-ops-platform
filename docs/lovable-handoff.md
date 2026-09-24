@@ -139,3 +139,11 @@ const response = await fetch(`${apiBase}/v1/auth/login`, {
 后端复用原 RBAC，未改变 points/referral/redemption/telegram/language 业务服务。管理员 `uiLanguage=zh-CN` 只影响后台，模板解析继续由服务端执行。OIDC 协议回调、MFA、密码找回、管理员 CRUD、Session 管理页面尚未实现，不要自行在 UI 拼出这些流程。
 
 首次管理员创建见 [admin-auth-operations.md](admin-auth-operations.md)。本轮未创建真实管理员或密码，正式联调前由负责人完成初始化、准备已有真实授权数据和测试环境配置。
+
+## 第二阶段第 1 批 UI 实现位置
+
+中文后台位于同仓库 `web/`。只开放总览与 Telegram 用户，并在用户详情提供余额读取及实际 `points.adjust` 授权下的调整入口。详情见 [前端接入与运行](../web/README.md)。所有业务数据使用上文已有 API，不添加直连数据库或前端积分事务。
+
+当前实现不持久化品牌/Bot ID、不保存身份令牌或 CSRF 到 Storage。登录恢复时重新读取 `/me`、授权及品牌；切换时失效旧请求、清空列表及详情。分页使用 `limit=50/after` 和本地游标历史，不展示虚构总条数。后台 UI 固定中文，不写任何用户、Bot 或模板语言。
+
+今后扩展应先补相应服务端 API，再增加前端路由；不要解禁核心表直写。前端测试 fixtures 和 `web/e2e/server.ts` 仅用于隔离验收，不得导入生产入口或用于正式账号初始化。
