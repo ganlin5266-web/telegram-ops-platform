@@ -12,3 +12,7 @@ GRANT UPDATE ON redemptions,redemption_codes TO telegram_app;
 GRANT UPDATE(id) ON point_accounts TO telegram_app;
 GRANT UPDATE(id) ON redemption_rules TO telegram_app;
 -- No DELETE, TRUNCATE, schema DDL, role management or direct balance writes granted.
+-- Browser authentication runtime access. Bootstrap uses the migration owner.
+GRANT SELECT ON admin_credentials,admin_sessions,admin_login_limits TO telegram_app;
+GRANT INSERT,UPDATE ON admin_sessions,admin_login_limits TO telegram_app;
+GRANT UPDATE(id) ON admins TO telegram_app;

@@ -4,7 +4,7 @@
 
 ## 已实现接口
 
-所有管理 API 使用 `Authorization: Bearer <个人凭证>`，默认未配置账号，全部拒绝访问。品牌/Bot UUID 是路径参数；无权限 403、不存在 404、重复 Key 内容冲突 409、参数无效 400。错误响应 `{error,requestId}`。积分和 Telegram ID 均以字符串返回。
+第二阶段第 1 批：正式服务器的所有管理 API 使用服务端 Session Cookie。旧的固定 Bearer 认证不再由 `server.ts` 启用；没有初始化管理员时，无法登录。品牌/Bot UUID 是路径参数；无权限 403、不存在 404、重复 Key 内容冲突 409、参数无效 400。错误响应 `{error,requestId}`。积分和 Telegram ID 均以字符串返回。
 
 | 方法 | 路径 | 权限及行为 |
 |---|---|---|
@@ -36,7 +36,7 @@
 
 ## 前端开工顺序
 
-1. 后端接 OIDC 登录，提供安全会话（不要把初期服务集成凭证硬编码进前端）；部署同源反代或配置精确来源 CORS。
+1. 先按下面的 Session 登录与作用域发现流程接入；部署同源反代或配置精确来源 CORS。OIDC 联邦登录留作后续可选接入，不能在前端硬编码管理凭证。
 2. 先使用用户列表、余额、模板预览 API 建立只读后台。
 3. 管理积分 UI 接入调整 API，设置业务事件 UUID、重试 Key、理由、确认预览。
 4. 后端补充 Bot/模板/菜单/活动接口后再制作配置页面；发送和兑换需单独验收。
@@ -51,7 +51,7 @@
 
 | 模块 | 必须由服务端执行的边界 |
 |---|---|
-| Auth / RBAC | 验证个人身份、账号状态、权限及 brand/bot scope；角色来自数据库，不能信任浏览器传来的角色。初期 Bearer 摘要映射仅限受控集成；浏览器正式接入前完成 OIDC/会话 |
+| Auth / RBAC | 验证个人身份、账号状态、权限及 brand/bot scope；角色来自数据库，不能信任浏览器传来的角色。现已使用本地密码认证和安全 Session；以后可接入 OIDC 身份验证，继续使用同一管理员与 RBAC |
 | Bot 配置 | 通过授权配置服务维护品牌、Bot、语言；**Lovable 不能读取 Bot Token 或 Webhook Secret**，也不能访问服务端环境变量 |
 | 用户管理 | 当前仅列表及余额读取；Telegram ID 是身份，username 可变；不可改用户 Bot/品牌归属绕过隔离 |
 | Point Account / Ledger | **Lovable 不能直接 UPDATE point_accounts.balance**；任何增减必须调用服务端积分 Service/API、经过幂等校验并产生 Ledger。不得 INSERT/UPDATE/DELETE 流水伪造余额 |
@@ -64,3 +64,78 @@
 | Audit Log | 由服务端伴随敏感操作同事务写入；前端不能伪造管理员/前后值，不得修改或删除日志 |
 
 隔离规则没有跨 Bot 共享特例：同一个 Telegram User ID 在 A1、A2、B1 中是不同运营档案、钱包及邀请关系。即使同品牌也不能共享积分账户。未来如需要汇总或共享，必须另行确认架构，不得让 UI 自行联表写入实现。
+
+## 第二阶段第 1 批：浏览器认证与范围发现（已实现）
+
+不需要 Mock 管理员、品牌或 Bot。数据来自真实 admins/admin_roles/brands/telegram_bots。新数据库没有品牌/Bot 时返回空列表；不得把空列表替换成虚构运营数据。本轮没有新增品牌/Bot 创建 API。
+
+| 方法 | API | 成功返回 |
+|---|---|---|
+| POST | `/v1/auth/login` | `{csrfToken,expiresAt}`；Session 仅通过 HttpOnly Set-Cookie 下发 |
+| POST | `/v1/auth/logout` | 204；服务器撤销 Session，同时清除 Cookie |
+| GET | `/v1/me` | `id,displayName,status,uiLanguage,grants,csrfToken,expiresAt` |
+| GET | `/v1/me/permissions` | `{grants:[{brandId,botId,role,permissions}]}` |
+| GET | `/v1/me/permissions?brandId=UUID&botId=UUID` | 当前范围实际生效的 `{brandId,botId,permissions}`；两个参数必须同时提供 |
+| GET | `/v1/me/brands` | `{items:[{brandId,name,status,defaultLanguage}]}` |
+| GET | `/v1/me/brands/{brandId}/bots` | `{items:[{botId,brandId,name,username,status,defaultLanguage}]}` |
+
+权限必须读取 `permissions` 数组，不根据角色名字推断。未指定范围的 grants 不能简单合并为全局权限。空 brandId 的有效授权仅来自现有全局 Super Admin；brand 范围角色覆盖该品牌的 Bot；bot 范围角色只覆盖指定 Bot。列表可展示授权范围内的 disabled 品牌/Bot，保留其状态，便于后台读取已有数据，不意味着允许 Telegram 执行。
+
+品牌、Bot 切换是前端选择下一次请求的路径范围，不修改 Session，不新增服务端“当前 Bot”全局变量。因此多个浏览器标签页可以选择不同 Bot；每次 API 仍独立验证范围。切换时清理旧范围的缓存及表单。
+
+### 浏览器请求顺序
+
+1. 页面加载调用 `/v1/me`，所有请求使用 `credentials: 'include'`。401 时进入登录页。
+2. 登录使用 JSON `{login,password}`，携带 `X-CSRF-Protection: 1`；浏览器自动发送 Origin。登录名会去空格并转小写。不要保存密码。
+3. 登录响应的 `csrfToken` 只保存在内存；重新加载可通过 `/v1/me` 重新获取。不要尝试读取 HttpOnly Cookie。
+4. 获取 `/v1/me/brands`，选择品牌后获取 bots，再查询该范围的实际权限。
+5. 使用原有 users 与 points GET 接口显示真实数据。用户列表仍只有 `limit/after`，没有新增搜索、排序或导出。
+6. 退出请求使用 POST，携带 `X-CSRF-Token`。所有已登录写请求（包括既有积分调整接口）均要求这一 Header，以及可信 Origin。
+
+```javascript
+// apiBase 来自非敏感的部署配置，不含任何凭证。
+const response = await fetch(`${apiBase}/v1/auth/login`, {
+  method: 'POST',
+  credentials: 'include',
+  headers: {'Content-Type': 'application/json', 'X-CSRF-Protection': '1'},
+  body: JSON.stringify({login, password})
+});
+// 先处理非 2xx，再从 JSON 取得 csrfToken；本示例没有硬编码账号或密码。
+```
+
+### Cookie / CORS / CSRF
+
+- 服务器生成 256 位随机 Session Token；数据库只存 SHA256 摘要，管理员密码存带随机盐的 scrypt 哈希（N=32768,r=8,p=3）。
+- Session 默认 8 小时绝对有效期，不自动续期；可通过 `ADMIN_SESSION_SECONDS` 设置 60–86400 秒。
+- 生产 `NODE_ENV=production` 强制 Secure，Cookie 名 `__Host-telegram_ops_session`，HttpOnly、Path=/、不设置 Domain。普通本地 HTTP 开发使用 `telegram_ops_session`。
+- 默认 SameSite=Lax。前后端同站点的不同子域仍需精确 CORS；真正跨站点使用 `ADMIN_COOKIE_SAME_SITE=None` 和 Secure/HTTPS。
+- 第三方 Cookie 可能被浏览器阻止；优先同源反代或同站点域名。不能为了跨站点可用性关闭 CSRF 或把 Session Token 改放 localStorage。
+- `ADMIN_ALLOWED_ORIGINS` 是逗号分隔的精确 Origin（协议、域名、端口），无通配符、无路径。生产只接受 HTTPS Origin。即使同源，也应把后台页面 Origin 加入列表。
+- 已允许 Origin 得到对应的 Allow-Origin 与 Allow-Credentials:true；未知 Origin 返回 403，无凭证 CORS 放行头。
+- 写请求必须有可信 Origin。登录额外要求 JSON 与自定义 Header，阻止跨站表单登录；已登录写请求另要求绑定当前 Session 的 CSRF Token。
+- Cookie 被服务器轮换、退出撤销、过期或管理员被禁用后不能继续使用。权限更改在后续请求实时查询，不能把 `/me` 的权限缓存当成授权依据。
+- `/v1/` 响应禁止缓存。不得把 Cookie、CSRF Header 或密码写到前端监控、分析埋点和日志。
+
+### 错误处理
+
+| HTTP / error | Lovable 行为 |
+|---|---|
+| 401 `invalid_credentials` | 显示统一“登录信息错误或账号不可用”，不区分账号是否存在 |
+| 401 `unauthorized` / `session_expired` | 清除前端身份、权限、CSRF 和租户数据缓存，转登录；不能自动重放上次写操作 |
+| 403 `forbidden` | 无权访问所选范围/操作；刷新权限与范围选择，不退化成其他 Bot 数据 |
+| 403 `origin_not_allowed` / `origin_required` / `cors_denied` | 部署 Origin/CORS 配置问题，不应让用户反复重试 |
+| 403 `csrf_failed` | 重新获取 `/me`；确认身份后由用户重新操作，不盲目重发敏感请求 |
+| 400 `invalid_request` | 修正参数 |
+| 429 `login_rate_limited` | 登录限流，按 Retry-After 提示等待 |
+| 404 `not_found` | 对象不在有效范围或不存在；不要尝试移除 scope 再查 |
+| 500 `internal_error` | 展示 requestId 供管理员排查，禁止展示内部 SQL/Secret |
+
+登录基础限流使用 PostgreSQL 持久化计数，15 分钟窗口：每个规范化登录名最多 10 次、每个来源 IP 最多 50 次（含成功尝试），跨进程共享；不存在的登录名也同样计数。服务器默认不信任 X-Forwarded-For，不能用伪造 Header 绕过。反向代理部署应在可信网络层限流，并按部署拓扑由后端负责人配置可信代理；不要直接开启 trustProxy:true。当前未添加代理信任配置。
+
+### 审计和边界
+
+新增事件：登录成功/失败/限流、退出、Session 轮换/撤销/过期、权限拒绝、首次初始化。过期在 Session 再次被使用时惰性记录；已过期 Session 即使没有访问也不能认证。日志不包含密码、哈希、Session Token、CSRF Token或 Bot Secret。
+
+后端复用原 RBAC，未改变 points/referral/redemption/telegram/language 业务服务。管理员 `uiLanguage=zh-CN` 只影响后台，模板解析继续由服务端执行。OIDC 协议回调、MFA、密码找回、管理员 CRUD、Session 管理页面尚未实现，不要自行在 UI 拼出这些流程。
+
+首次管理员创建见 [admin-auth-operations.md](admin-auth-operations.md)。本轮未创建真实管理员或密码，正式联调前由负责人完成初始化、准备已有真实授权数据和测试环境配置。

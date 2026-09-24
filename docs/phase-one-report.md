@@ -1,5 +1,8 @@
 # 第一阶段交付报告
 
+> 状态补充（保留下面的历史原文）：第一阶段最初本地报告为 18 项测试；随后已提交 GitHub，并完成真实 PostgreSQL 17 CI，30 项测试全部通过、0 失败。
+> 验收提交：`7dbbdd32aeb279c26afe32cce06529e12d8334a0`；[对应 Actions 记录](https://github.com/ganlin5266-web/telegram-ops-platform/actions/runs/36043012145)。下面的“未推送／未执行 CI”描述仅代表最初本地交付时点。第二阶段第 1 批新增认证验收结果以新提交的 Actions 为准。
+
 本次仅建设核心底座，完成后停止，不进入第二阶段。项目保存在本地 Git 工作区；未配置 GitHub remote、未推送、未发布、未接入正式 Bot Token、未发送 Telegram 消息或正式运营积分。
 
 | 交付项 | 结果与说明 |

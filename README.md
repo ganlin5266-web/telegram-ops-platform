@@ -26,7 +26,7 @@ npm run dev
 
 部署准备时 DBA 分别建立 Migration owner 与 `telegram_app` 账号，owner 应拥有 public 下的应用表，然后执行 `db/runtime-grants.sql`。不要用超级用户启动服务，更不要向 Lovable 浏览器分发数据库凭证。本阶段没有创建真实账号、Bot 或生产数据的命令。
 
-开发时可由可信服务器脚本/DBA 写入 brand、bot、admin 与 admin_roles；Bot 默认 disabled，真实 Secret 仅环境变量。具体映射与权限参阅架构文档。管理 API 默认拒绝访问（ADMIN_CREDENTIALS_JSON 为空），没有后门账号或默认密码。
+开发时可由可信服务器脚本/DBA 写入 brand、bot、admin 与 admin_roles；Bot 默认 disabled，真实 Secret 仅环境变量。具体映射与权限参阅架构文档。第二阶段第 1 批管理 API 使用服务端 Session；没有初始化管理员时无法登录，没有后门账号或默认密码。首次初始化与运行配置见 [管理员认证运维](docs/admin-auth-operations.md)。
 
 ## 目录
 
@@ -52,3 +52,5 @@ src/
 详见 [架构](docs/architecture.md)、[数据表](docs/schema.md)、[Lovable 接口](docs/lovable-handoff.md)、[第一阶段报告](docs/phase-one-report.md)。
 
 唯一主代码仓库：[ganlin5266-web/telegram-ops-platform](https://github.com/ganlin5266-web/telegram-ops-platform)。本轮仅进行第一阶段代码入库和 PostgreSQL 17 CI 验收；不进入第二阶段。实际验收以 Actions 对应 commit 的日志为准。
+
+第二阶段第 1 批已新增登录、退出、当前身份/权限和授权品牌/Bot发现；原有用户/余额 API 复用 Session 认证及既有 RBAC。详细浏览器接入协议见 [Lovable 交接](docs/lovable-handoff.md)。未制作 UI、未接正式 Bot、未部署生产。
