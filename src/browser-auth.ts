@@ -1,5 +1,4 @@
 import {createHash,randomBytes,timingSafeEqual} from 'node:crypto';
-import {hostname} from 'node:os';
 import type {FastifyInstance,FastifyRequest,FastifyReply} from 'fastify';
 import {z} from 'zod';
 import {DomainError,type Database,type Queryable} from './db.js';
@@ -55,10 +54,7 @@ export function attachBrowserAuth(app:FastifyInstance,db:Database,config:Browser
   const path=request.url.split('?')[0]!;if(!path.startsWith('/v1/')) return;
   reply.header('Cache-Control','no-store').header('Vary','Origin').header('X-Content-Type-Options','nosniff');
   const origin=request.headers.origin;
-  if(origin&&!config.allowedOrigins.includes(origin)) {
-   request.log.warn({diagnostic:'temporary_origin_not_allowed',requestId:request.id,method:request.method,path,origin,allowedOrigins:[...config.allowedOrigins],hostname:hostname(),pid:process.pid});
-   throw new DomainError('origin_not_allowed',403);
-  }
+  if(origin&&!config.allowedOrigins.includes(origin)) throw new DomainError('origin_not_allowed',403);
   if(origin) reply.header('Access-Control-Allow-Origin',origin).header('Access-Control-Allow-Credentials','true');
   if(request.method==='OPTIONS') {
    if(!origin||!['GET','POST'].includes(String(request.headers['access-control-request-method']))) throw new DomainError('cors_denied',403);
