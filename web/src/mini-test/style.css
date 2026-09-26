@@ -1,0 +1,52 @@
+:root {
+  font:
+    16px/1.6 system-ui,
+    sans-serif;
+  color: #16243a;
+  background: #f2f5f9;
+}
+body {
+  margin: 0;
+  padding: 24px 16px;
+}
+main {
+  max-width: 580px;
+  margin: auto;
+  padding: 24px;
+  border-radius: 16px;
+  background: white;
+}
+.badge {
+  color: #8b3b00;
+  font-weight: 700;
+}
+h1 {
+  font-size: 24px;
+}
+dt {
+  font-weight: 600;
+  margin-top: 14px;
+}
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+button {
+  font: inherit;
+  padding: 10px 16px;
+  margin: 8px 4px 0 0;
+  color: white;
+  background: #1859ad;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+#status {
+  padding: 12px;
+  background: #edf4ff;
+  overflow-wrap: anywhere;
+}

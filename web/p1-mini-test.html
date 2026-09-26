@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' https://telegram.org; style-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>P1 身份验收 · STAGING ONLY</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main>
+      <p class="badge">STAGING / TEST ONLY</p>
+      <h1>P1 Telegram 身份验收</h1>
+      <p>仅用于 FUN_Club_Staging_bot 的独立身份认证测试，不发放积分或奖励。</p>
+      <p>
+        请从专用测试 Bot 打开。Session 仅保存在内存；刷新后请关闭并重新打开 Mini
+        App。同一 initData 不会重复交换。
+      </p>
+      <p id="status" role="status" aria-live="polite">未连接</p>
+      <dl>
+        <dt>服务端用户 ID（脱敏）</dt>
+        <dd id="user">—</dd>
+        <dt>Brand ID</dt>
+        <dd id="brand">—</dd>
+        <dt>Bot ID</dt>
+        <dd id="bot">—</dd>
+        <dt>Session 到期时间</dt>
+        <dd id="expiry">—</dd>
+      </dl>
+      <p>
+        显示的是服务端认证后返回的内部用户 ID，不将客户端 Telegram
+        资料作为认证证明。
+      </p>
+      <button id="connect" type="button">连接 Telegram 身份</button>
+      <button id="me" type="button" disabled>读取 /me</button>
+      <button id="logout" type="button" disabled>Logout</button>
+    </main>
+    <script type="module" src="/src/mini-test/main.ts"></script>
+  </body>
+</html>
