@@ -87,6 +87,8 @@ for(const [name,patch,code] of [
  await assert.rejects(()=>seedStagingUsers(wrap(raw,{identity:{...good,...patch}}),true),new RegExp(code));assert.deepEqual(await counts(raw),empty);
 }));
 for(const [name,sql,code] of [
+ ['missing P1 migration',"DELETE FROM schema_migrations WHERE name='007_mini_auth.sql'",'migration_set_mismatch'],
+ ['changed P1 checksum',"UPDATE schema_migrations SET checksum='invalid' WHERE name='007_mini_auth.sql'",'migration_checksum_mismatch'],
  ['migration set',"DELETE FROM schema_migrations WHERE name='006_dashboard.sql'",'migration_set_mismatch'],
  ['migration checksum',"UPDATE schema_migrations SET checksum='bad' WHERE name='006_dashboard.sql'",'migration_checksum_mismatch'],
  ['Brand',"UPDATE brands SET timezone='Asia/Shanghai'",'brand_conflict'],

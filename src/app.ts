@@ -8,9 +8,11 @@ import {getTemplate} from './language.js';
 import {attachBrowserAuth,type BrowserAuthConfig} from './browser-auth.js';
 import {attachDashboard} from './dashboard.js';
 import {attachOperationsQueries} from './operations-queries.js';
+import {attachMiniAuth,validateMiniConfig,type MiniConfig} from './mini-auth.js';
 import type {FastifyRequest} from 'fastify';
 const scopeSchema=z.object({brandId:z.uuid(),botId:z.uuid()});
-export function createApp(db:Database,secrets:SecretProvider,authenticate:Authenticator,browserAuth?:BrowserAuthConfig) {
+export function createApp(db:Database,secrets:SecretProvider,authenticate:Authenticator,browserAuth?:BrowserAuthConfig,miniAuth?:MiniConfig) {
+ if(miniAuth) validateMiniConfig(miniAuth);
  const app=Fastify({bodyLimit:262144,logger:{redact:['req.headers.authorization','req.headers.x-telegram-bot-api-secret-token','req.headers.cookie','req.headers.x-csrf-token','res.headers.set-cookie']},logController:new LogController({disableRequestLogging:true})});
  app.setErrorHandler((err,request,reply)=>{
   if(err instanceof z.ZodError) return reply.code(400).send({error:'invalid_request',requestId:request.id});
@@ -21,8 +23,6 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
   request.log.error({requestId:request.id,code:(err as {code?:string}).code??'internal'},'request_failed');
   return reply.code(500).send({error:'internal_error',requestId:request.id});
  });
- const sessionAuthenticate=browserAuth?attachBrowserAuth(app,db,browserAuth):undefined;
- const authenticateRequest=(request:FastifyRequest)=>sessionAuthenticate?sessionAuthenticate(request):authenticate(request.headers.authorization);
  app.get('/health',async()=>({status:'ok'}));
  app.get('/ready',async()=>{await db.query('SELECT 1');return {status:'ready'};});
  app.post('/webhooks/telegram/:botId',async request=>{
@@ -30,6 +30,13 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
   const header=request.headers['x-telegram-bot-api-secret-token'];
   return handleUpdate(db,botId,typeof header==='string'?header:undefined,request.body,secrets);
  });
+ if(miniAuth) app.register(async mini=>attachMiniAuth(mini,db,secrets,miniAuth),{prefix:'/v1/mini'});
+ // Encapsulation keeps every existing admin route and hook in the same boundary.
+ app.register(async app=>{
+ const sessionAuthenticate=browserAuth?attachBrowserAuth(app,db,browserAuth):undefined;
+ const authenticateRequest=(request:FastifyRequest)=>sessionAuthenticate?sessionAuthenticate(request):authenticate(request.headers.authorization);
+ // Preflight must resolve inside this scope rather than the root 404 handler.
+ if(browserAuth) app.options('/v1/*',async()=>({}));
  const base='/v1/brands/:brandId/bots/:botId';
  attachOperationsQueries(app,db,authenticateRequest);
  attachDashboard(app,db,authenticateRequest);
@@ -51,6 +58,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  app.get(`${base}/users/:userId/templates/:key`,async request=>{
   const s=scopeSchema.extend({userId:z.uuid(),key:z.string().regex(/^[A-Z_]{1,64}$/)}).parse(request.params),p=await authenticateRequest(request);
   return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');return getTemplate(tx,s,s.userId,s.key);});
+ });
  });
  return app;
 }

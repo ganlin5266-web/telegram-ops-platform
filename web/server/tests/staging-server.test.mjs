@@ -98,12 +98,13 @@ test('GET path and query preserved; Host fixed; client target headers do not sel
 test('POST raw body, Origin, Cookie, CSRF and Idempotency-Key preserved', async () => {
   const headers = { origin: 'https://frontend.example.invalid', cookie: 'session=synthetic',
     'x-csrf-protection': '1', 'x-csrf-token': 'synthetic-test-value', 'idempotency-key': 'test-event',
+    authorization: 'Bearer synthetic-mini-session',
     'content-type': 'application/json', connection: 'x-hop-request', 'x-hop-request': 'remove' };
   const body = '{"test":"汉字", "number":"9007199254740901"}';
   const result = await request('/v1/auth/login?x=1', { method: 'POST', headers, body });
   assert.equal(result.status, 200);
   const last = captured.at(-1); assert.equal(last.method, 'POST'); assert.equal(last.body, body);
-  for (const name of ['origin', 'cookie', 'x-csrf-protection', 'x-csrf-token', 'idempotency-key', 'content-type'])
+  for (const name of ['origin', 'cookie', 'authorization', 'x-csrf-protection', 'x-csrf-token', 'idempotency-key', 'content-type'])
     assert.equal(last.headers[name], headers[name]);
   assert.equal(last.headers['x-hop-request'], undefined);
   assert.equal(result.headers['x-hop-response'], undefined);

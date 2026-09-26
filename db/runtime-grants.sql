@@ -16,3 +16,7 @@ GRANT UPDATE(id) ON redemption_rules TO telegram_app;
 GRANT SELECT ON admin_credentials,admin_sessions,admin_login_limits TO telegram_app;
 GRANT INSERT,UPDATE ON admin_sessions,admin_login_limits TO telegram_app;
 GRANT UPDATE(id) ON admins TO telegram_app;
+-- Mini App identity is separate from admin sessions. No runtime cleanup/DDL rights.
+GRANT SELECT,INSERT ON mini_auth_exchanges,mini_sessions TO telegram_app;
+GRANT UPDATE(revoked_at,revoke_reason) ON mini_sessions TO telegram_app;
+GRANT SELECT,INSERT,UPDATE ON mini_auth_limits TO telegram_app;

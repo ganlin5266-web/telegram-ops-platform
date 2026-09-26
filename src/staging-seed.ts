@@ -8,7 +8,7 @@ export class SeedError extends Error {
 export const seedBrand={name:'Staging Test Brand',slug:'staging-test-brand',default_language:'zh-CN',timezone:'UTC',status:'active',countries:[] as string[]};
 // Deliberately invalid as a real Telegram username (hyphens); internal synthetic label only.
 export const seedBot={name:'Staging Test Bot',username:'staging-test-bot-not-telegram',token_secret_ref:'STAGING_TEST_BOT_TOKEN_UNCONFIGURED',webhook_secret_ref:'STAGING_TEST_BOT_WEBHOOK_UNCONFIGURED',default_language:'zh-CN',supported_languages:['zh-CN'],timezone:null,status:'disabled'};
-const migrations=['001_core.sql','002_harden_ledger.sql','003_ledger_conflict_safety.sql','004_admin_sessions.sql','005_operations_queries.sql','006_dashboard.sql'];
+const migrations=['001_core.sql','002_harden_ledger.sql','003_ledger_conflict_safety.sql','004_admin_sessions.sql','005_operations_queries.sql','006_dashboard.sql','007_mini_auth.sql'];
 export function seedMode(args:string[]):boolean {
  if(args.length===0 || (args.length===1 && args[0]==='--dry-run')) return false;
  if(args.length===1 && args[0]==='--apply') return true;

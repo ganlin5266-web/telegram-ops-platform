@@ -28,7 +28,7 @@ npm run staging:seed -- --apply
 
 ## 保护与固定数据
 
-必须 current_database() 精确为 telegram_ops_staging、pg_stat_ssl.ssl=true，当前角色拥有数据库及六张相关表且不是 telegram_app。数据库名称本身不是环境认证，操作者仍需核对 External endpoint 属于独立 staging。001–006 的完整记录集和 SHA256 必须与当前检出的文件一致；额外 migration 也拒绝，后续 schema 扩展需先重新审查 seed 工具。
+必须 current_database() 精确为 telegram_ops_staging、pg_stat_ssl.ssl=true，当前角色拥有数据库及六张相关表且不是 telegram_app。数据库名称本身不是环境认证，操作者仍需核对 External endpoint 属于独立 staging。001–007 的完整记录集和 SHA256 必须与当前检出的文件一致；额外 migration 也拒绝，后续 schema 扩展需先重新审查 seed 工具。
 
 staging-admin 必须对应 local:staging-admin、active、global Super Admin（brand_id/bot_id 均 NULL），且该角色具有 system.manage。只读验证身份，不创建或修改管理员及授权。
 

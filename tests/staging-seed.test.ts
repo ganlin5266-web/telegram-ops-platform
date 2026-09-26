@@ -45,6 +45,8 @@ test('seed dry-run is read-only, plans both rows and writes no audit',()=>fixtur
  assert.ok(!events.some(s=>/^INSERT|^UPDATE|^DELETE/.test(s)));
 }));
 for(const [name,sql,code] of [
+ ['missing P1 migration',"DELETE FROM schema_migrations WHERE name='007_mini_auth.sql'",'migration_set_mismatch'],
+ ['changed P1 checksum',"UPDATE schema_migrations SET checksum='invalid' WHERE name='007_mini_auth.sql'",'migration_checksum_mismatch'],
  ['missing migration',"DELETE FROM schema_migrations WHERE name='006_dashboard.sql'",'migration_set_mismatch'],
  ['changed checksum',"UPDATE schema_migrations SET checksum='invalid' WHERE name='006_dashboard.sql'",'migration_checksum_mismatch'],
  ['missing admin',"DELETE FROM admin_roles; DELETE FROM admin_credentials; DELETE FROM admins",'active_global_staging_admin_required'],
