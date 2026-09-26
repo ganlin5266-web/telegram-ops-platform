@@ -8,7 +8,12 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "format:check": "prettier --check src tests e2e *.ts *.json index.html"
+    "format:check": "prettier --check src tests e2e *.ts *.json index.html",
+    "start:staging": "node server/staging-server.mjs",
+    "test:proxy": "node --test server/tests/*.test.mjs",
+    "prebuild": "node server/bundle-scan.mjs --prebuild",
+    "postbuild": "npm run scan:bundle",
+    "scan:bundle": "node server/bundle-scan.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",
