@@ -109,7 +109,7 @@ test('composite foreign keys and services reject cross-brand and cross-bot user 
 });
 test('same Telegram update and user IDs are independently accepted in separate bots',async()=>{
  const a=await fixture(),b=await fixture();await start(a.s.botId,55,987);await start(b.s.botId,55,987);
- assert.equal((await db.query('SELECT id FROM telegram_users WHERE telegram_user_id=987')).rows.length,2);
+ assert.equal((await db.query('SELECT id FROM telegram_users WHERE telegram_user_id=987 AND bot_id=ANY($1::uuid[])',[[a.s.botId,b.s.botId]])).rows.length,2);
 });
 test('API denies viewer adjustment and wrong brand, permits scoped admin with atomic audit',async()=>{
  const {s,user}=await fixture(),other=await fixture();
