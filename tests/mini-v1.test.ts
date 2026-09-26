@@ -120,3 +120,12 @@ test('V1 concurrent recovery returns the same existing session, no duplicate exc
  assert.equal((await one(db,'SELECT count(*)::int AS n FROM mini_sessions WHERE bot_id=$1',[f.bot.id])).n,1);
  assert.equal((await one(db,'SELECT count(*)::int AS n FROM mini_auth_exchanges WHERE bot_id=$1',[f.bot.id])).n,1);
 });
+test('V2.1 home exposes only own locale inputs without modifying message language or needing grants',async()=>{
+ const f=await fixture(true),r=await f.exchange(),token=r.json().token;
+ const uid=(await f.get(token,'me')).json().userId;
+ await db.query("UPDATE telegram_users SET preferred_language='pt-BR',telegram_language_code='es' WHERE id=$1",[uid]);
+ const profile=(await f.get(token,'home')).json().profile;
+ assert.equal(profile.preferredLanguage,'pt-BR');assert.equal(profile.botLanguage,'en');assert.equal(profile.projectLanguage,'en');assert.equal(profile.telegramLanguage,'es');
+ assert.equal((await f.get(token,'home?userId='+randomUUID())).statusCode,400);
+ assert.equal((await one(db,'SELECT preferred_language FROM telegram_users WHERE id=$1',[uid])).preferred_language,'pt-BR');
+});

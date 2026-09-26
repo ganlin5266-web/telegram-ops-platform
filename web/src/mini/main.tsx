@@ -1,21 +1,65 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createClient, MiniError, type Home, type Page } from "./client";
-import { messages } from "./i18n";
+import { miniBrand } from "./brand";
+import {
+  supportedUiLocales,
+  localeNames,
+  resolveLocale,
+  translate,
+  formatPoints,
+  formatDate,
+  readPreference,
+  savePreference,
+  contentLocale,
+  homeState,
+  type Locale,
+  type Key,
+} from "./i18n";
 import "./style.css";
-const client = createClient();
-const tabs = ["首页", "活动", "奖励", "邀请", "我的"] as const;
+const tabs = ["home", "activities", "rewards", "invite", "me"] as const;
+type Tab = (typeof tabs)[number];
+type Kind = "point-ledger" | "referrals" | "redemptions";
+const templates = [
+  ["newcomer", "✧", "newcomerBody"],
+  ["daily", "☀", "dailyBody"],
+  ["free", "◇", "freeBody"],
+  ["friends", "↗", "inviteBody"],
+] as const;
 export function MiniApp() {
-  const [tab, setTab] = useState<(typeof tabs)[number]>("首页"),
+  const client = useRef(createClient()).current;
+  const [tab, setTab] = useState<Tab>("home"),
     [home, setHome] = useState<Home>(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<MiniError>(),
     [out, setOut] = useState(false),
-    [kind, setKind] = useState<"point-ledger" | "referrals" | "redemptions">(
-      "point-ledger",
-    ),
+    [kind, setKind] = useState<Kind>("point-ledger"),
     [page, setPage] = useState<Page>(),
-    [help, setHelp] = useState(false);
+    [panel, setPanel] = useState<"games" | "language" | "help" | null>(null),
+    [device, setDevice] = useState<Locale | undefined>(() =>
+      readPreference(miniBrand.appKey),
+    );
+  const version = useRef(0);
+  const panelRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (panel) {
+      panelRef.current?.focus({ preventScroll: true });
+      panelRef.current?.scrollIntoView?.({ block: "start" });
+    }
+  }, [panel]);
+  const locale = resolveLocale({
+    device,
+    preferred: home?.profile.preferredLanguage,
+    bot: home?.profile.botLanguage,
+    project: home?.profile.projectLanguage ?? miniBrand.defaultLocale,
+    telegram: home?.profile.telegramLanguage,
+    fallback: miniBrand.defaultLocale,
+  });
+  const t = (k: Key, v?: Record<string, string>) => translate(locale, k, v);
+  useEffect(() => {
+    document.documentElement.lang = contentLocale(locale);
+    document.title = miniBrand.name;
+  }, [locale]);
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     setError(undefined);
@@ -40,262 +84,392 @@ export function MiniApp() {
     window.addEventListener("pagehide", forget);
     return () => window.removeEventListener("pagehide", forget);
   }, []);
-  const records = (k: typeof kind, more = false) =>
-    run(async () => {
+  const records = (k: Kind, more = false) => {
+    const v = ++version.current;
+    return run(async () => {
       const next = await client.page(
         k,
         more ? (page?.nextCursor ?? undefined) : undefined,
       );
-      setPage(
-        more
-          ? { ...next, items: [...(page?.items ?? []), ...next.items] }
-          : next,
-      );
+      if (v === version.current)
+        setPage(
+          more
+            ? { ...next, items: [...(page?.items ?? []), ...next.items] }
+            : next,
+        );
     });
-  function select(t: typeof tab) {
-    setTab(t);
+  };
+  function select(next: Tab, k?: Kind) {
+    version.current++;
+    setTab(next);
     setPage(undefined);
     setError(undefined);
-    setHelp(false);
-    if (t === "奖励") {
-      setKind("point-ledger");
-      void records("point-ledger");
-    }
-    if (t === "邀请") {
-      setKind("referrals");
-      void records("referrals");
+    setPanel(null);
+    if (next === "rewards" || next === "invite") {
+      const history = k ?? (next === "invite" ? "referrals" : "point-ledger");
+      setKind(history);
+      void records(history);
     }
   }
-  const balance = home?.points.accountExists
-    ? home.points.balance
-    : "暂无积分账户";
+  function historySelect(k: Kind) {
+    setKind(k);
+    setPage(undefined);
+    void records(k);
+  }
+  const titleKey =
+    kind === "point-ledger"
+      ? "ledger"
+      : kind === "referrals"
+        ? "inviteHistory"
+        : "myRedeem";
+  const emptyKey =
+    kind === "point-ledger"
+      ? "ledgerEmpty"
+      : kind === "referrals"
+        ? "inviteEmpty"
+        : "redeemEmpty";
+  const hintKey =
+    kind === "point-ledger"
+      ? "ledgerHint"
+      : kind === "referrals"
+        ? "inviteHint"
+        : "redeemHint";
   const history = (
-    <section className="card">
-      <h2>
-        {kind === "point-ledger"
-          ? "积分流水"
-          : kind === "referrals"
-            ? "邀请记录"
-            : "兑换记录"}
-      </h2>
+    <section className="card history">
+      <h2>{t(titleKey)}</h2>
+      {!page && busy && <div className="skeleton" aria-hidden="true" />}
       {page?.items.length === 0 && (
-        <p className="muted">
-          {kind === "point-ledger"
-            ? "暂无积分记录"
-            : kind === "referrals"
-              ? "暂无邀请记录"
-              : "暂无兑换记录"}
-        </p>
+        <div className="empty-small">
+          <span aria-hidden="true">≋</span>
+          <h3>{t(emptyKey)}</h3>
+          <p className="muted">{t(hintKey)}</p>
+        </div>
       )}
       {page?.items.map((r) => (
         <article className="record" key={r.id}>
           <div>
             <strong>
-              {kind === "point-ledger"
-                ? r.delta?.startsWith("-")
-                  ? "积分支出"
-                  : "积分收入"
-                : kind === "referrals"
-                  ? "邀请关系"
-                  : "兑换申请"}
+              {t(
+                kind === "point-ledger"
+                  ? r.delta?.startsWith("-")
+                    ? "spend"
+                    : "income"
+                  : kind === "referrals"
+                    ? "relation"
+                    : "requestRecord",
+              )}
             </strong>
-            <small>{new Date(r.created_at).toLocaleString("zh-CN")}</small>
+            <small>{formatDate(r.created_at, locale)}</small>
           </div>
           <div>
             {r.delta ? (
               <strong className={r.delta.startsWith("-") ? "" : "positive"}>
                 {r.delta.startsWith("-") ? "" : "+"}
-                {r.delta}
+                {formatPoints(r.delta, locale)}
               </strong>
             ) : r.points_cost ? (
-              <strong>{r.points_cost} 积分</strong>
+              <strong>
+                {formatPoints(r.points_cost, locale)} {t("pointsUnit")}
+              </strong>
             ) : null}
             <small>
-              {r.status
-                ? ((
-                    {
-                      bound: "已绑定",
-                      qualified: "已满足条件",
-                      invalid: "无效",
-                      pending: "待处理",
-                      processing: "处理中",
-                      success: "已完成",
-                      failed: "未完成",
-                      cancelled: "已取消",
-                    } as Record<string, string>
-                  )[r.status] ?? "已记录")
-                : "已入账"}
+              {t(
+                (r.status &&
+                [
+                  "bound",
+                  "qualified",
+                  "invalid",
+                  "pending",
+                  "processing",
+                  "success",
+                  "failed",
+                  "cancelled",
+                ].includes(r.status)
+                  ? r.status
+                  : r.status
+                    ? "recorded"
+                    : "posted") as Key,
+              )}
             </small>
           </div>
         </article>
       ))}
       {page?.nextCursor && (
-        <button disabled={busy} onClick={() => void records(kind, true)}>
-          查看更多
+        <button
+          className="text-button"
+          disabled={busy}
+          onClick={() => void records(kind, true)}
+        >
+          {t("more")}
         </button>
       )}
     </section>
   );
+  const catalogue = (
+    <div className="activity-grid">
+      {templates.map(([key, icon, body]) => (
+        <article className="card activity-card" key={key}>
+          <div className="card-top">
+            <span className="tile-icon" aria-hidden="true">
+              {icon}
+            </span>
+            <span className="badge">{t("soon")}</span>
+          </div>
+          <h2>{t(key)}</h2>
+          <p className="muted">{t(body)}</p>
+          <small>{t("schedule")}</small>
+          <button disabled className="coming-button">
+            {t("upcoming")}
+          </button>
+        </article>
+      ))}
+    </div>
+  );
+  const balance = formatPoints(home?.points.balance, locale);
   return (
-    <div className="mini-shell">
+    <div className={`mini-shell theme-${miniBrand.theme}`}>
       <header>
-        <span className="eyebrow">
-          FUN CLUB <span>STAGING</span>
-        </span>
+        <div className="brand">
+          {miniBrand.logo ? (
+            <img src={miniBrand.logo} alt={miniBrand.name} />
+          ) : (
+            <span className="brand-mark" aria-hidden="true">
+              {miniBrand.monogram}
+            </span>
+          )}
+          <strong>{miniBrand.name}</strong>
+          {miniBrand.staging && <small className="stage">{t("staging")}</small>}
+        </div>
         <span className="avatar" aria-hidden="true">
-          {home?.profile.displayName.slice(0, 1) || "F"}
+          {home?.profile.displayName.slice(0, 1) || miniBrand.monogram}
         </span>
       </header>
       {!home || out ? (
         <main>
           <section className="hero">
-            <p className="eyebrow">你的专属服务空间</p>
-            <h1>{out ? "已安全退出" : "欢迎来到 FUN Club"}</h1>
-            <p>查看积分与记录，了解最新活动。你的身份由 Telegram 安全验证。</p>
-            {!out && (
+            <p className="eyebrow">{t("space")}</p>
+            <h1>
+              {out ? t("loggedOut") : t("greeting", { brand: miniBrand.name })}
+            </h1>
+            <p>{t("intro")}</p>
+            {!out ? (
               <button disabled={busy} onClick={() => void load()}>
-                {busy ? "正在连接…" : "连接 Telegram 身份"}
+                {t(busy ? "connecting" : "connect")}
               </button>
+            ) : (
+              <p>{t("reopen")}</p>
             )}
-            {out && <p>需要再次登录时，请关闭并从 Bot 重新打开。</p>}
           </section>
         </main>
       ) : (
         <main>
           <div className="title">
-            <p className="eyebrow">{home.profile.projectName}</p>
             <h1>
-              {tab === "首页" ? `你好，${home.profile.displayName}` : tab}
+              {tab === "home"
+                ? t("welcome", {
+                    name: home.profile.displayName || t("member"),
+                  })
+                : t(tab)}
             </h1>
           </div>
-          {tab === "首页" && (
+          {tab === "home" && (
             <>
-              <section className="hero">
-                <span className="pill">我的积分</span>
-                <div className="balance">{balance}</div>
-                <p>每笔积分都有记录。具体用途以已公布的活动与兑换规则为准。</p>
-                <button onClick={() => select("奖励")}>查看我的积分</button>
-              </section>
-              <div className="summary">
-                <button onClick={() => select("邀请")}>
-                  <strong>{home.invitedCount}</strong>
-                  <span>已邀请人数</span>
+              <section className="hero focus-card" data-testid="today-focus">
+                <span className="pill">{t("focus")}</span>
+                <span className="hero-art" aria-hidden="true">
+                  ✧
+                </span>
+                <h2>
+                  {t(
+                    homeState(home) === "empty_state" ? "ready" : "returnTitle",
+                  )}
+                </h2>
+                <p>
+                  {t(
+                    homeState(home) === "empty_state"
+                      ? "readyBody"
+                      : "returnBody",
+                  )}
+                </p>
+                <button onClick={() => select("activities")}>
+                  {t("focusCta")} <span aria-hidden="true">→</span>
                 </button>
-                <button
-                  onClick={() => {
-                    select("奖励");
-                    setKind("redemptions");
-                    void records("redemptions");
-                  }}
-                >
-                  <strong>{home.redemptionCount}</strong>
-                  <span>兑换记录</span>
+              </section>
+              <h2 className="section-title">{t("summary")}</h2>
+              <div className="summary">
+                <button onClick={() => select("rewards")}>
+                  <strong>{balance}</strong>
+                  <span>{t("points")}</span>
+                </button>
+                <button onClick={() => select("invite")}>
+                  <strong>{formatPoints(home.invitedCount, locale)}</strong>
+                  <span>{t("friends")}</span>
+                </button>
+                <button onClick={() => select("rewards", "redemptions")}>
+                  <strong>{formatPoints(home.redemptionCount, locale)}</strong>
+                  <span>{t("myRedeem")}</span>
                 </button>
               </div>
+              <h2 className="section-title">{t("quick")}</h2>
+              <div className="quick-grid">
+                {(
+                  [
+                    ["activityCentre", "activities", "✦"],
+                    ["rewardCentre", "rewards", "◇"],
+                    ["games", "games", "▧"],
+                    ["friends", "invite", "↗"],
+                  ] as const
+                ).map(([label, target, icon]) => (
+                  <button
+                    key={label}
+                    onClick={() =>
+                      target === "games" ? setPanel("games") : select(target)
+                    }
+                  >
+                    <span className="tile-icon" aria-hidden="true">
+                      {icon}
+                    </span>
+                    <strong>{t(label)}</strong>
+                    {target === "games" && <small>{t("soon")}</small>}
+                  </button>
+                ))}
+              </div>
+              <h2 className="section-title">{t("recommend")}</h2>
+              <div className="recommend">
+                {templates.slice(0, 3).map(([key, icon]) => (
+                  <div key={key}>
+                    <span aria-hidden="true">{icon}</span>
+                    <strong>{t(key)}</strong>
+                    <small>{t("soon")}</small>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {tab === "activities" && (
+            <>
+              <p className="page-intro">{t("activityIntro")}</p>
+              {catalogue}
               <section className="card">
-                <span className="eyebrow">接下来</span>
-                <h2>好活动，值得期待</h2>
-                <p className="muted">
-                  当前暂无可参加活动。活动开放后，可在这里查看。
-                </p>
-                <button className="text-button" onClick={() => select("活动")}>
-                  前往活动中心 →
-                </button>
+                <h2>{t("future")}</h2>
+                {(["platformTask", "milestone"] as const).map((k) => (
+                  <div className="placeholder-row" key={k}>
+                    <span>{t(k)}</span>
+                    <small>{t("soon")}</small>
+                  </div>
+                ))}
               </section>
             </>
           )}
-          {tab === "活动" && (
-            <section className="card empty">
-              <span className="empty-icon" aria-hidden="true">
-                ✦
-              </span>
-              <h2>新的活动正在准备</h2>
-              <p>当前暂无可参加活动。</p>
-              <p className="muted">活动尚未开放，不会扣除积分或发起奖励。</p>
-            </section>
-          )}
-          {tab === "奖励" && (
+          {tab === "rewards" && (
             <>
-              <section className="hero">
-                <span className="pill">当前积分</span>
-                <div className="balance">{balance}</div>
-                <p>积分按 Bot 独立记录。当前仅支持查看，不开放兑换申请。</p>
+              <section className="hero points-card">
+                <span className="pill">{t("points")}</span>
+                <div className="balance">
+                  {balance}
+                  <small> {t("pointsUnit")}</small>
+                </div>
+                <p>
+                  {t(
+                    home.points.accountExists
+                      ? "pointsBody"
+                      : "pointsEmptyBody",
+                  )}
+                </p>
               </section>
-              <div className="segmented">
+              <div className="reward-actions">
                 <button
                   aria-pressed={kind === "point-ledger"}
-                  onClick={() => {
-                    setKind("point-ledger");
-                    setPage(undefined);
-                    void records("point-ledger");
-                  }}
+                  onClick={() => historySelect("point-ledger")}
                 >
-                  积分流水
+                  {t("ledger")}
+                </button>
+                <button disabled>
+                  {t("redeemCentre")}
+                  <small>{t("soon")}</small>
                 </button>
                 <button
                   aria-pressed={kind === "redemptions"}
-                  onClick={() => {
-                    setKind("redemptions");
-                    setPage(undefined);
-                    void records("redemptions");
-                  }}
+                  onClick={() => historySelect("redemptions")}
                 >
-                  兑换记录
+                  {t("myRedeem")}
                 </button>
               </div>
               {history}
             </>
           )}
-          {tab === "邀请" && (
+          {tab === "invite" && (
             <>
               <section className="hero">
-                <span className="pill">一起发现更多</span>
-                <h2>我的邀请</h2>
-                <div className="balance">
-                  {home.invitedCount}
-                  <small> 人</small>
+                <span className="pill">{t("friends")}</span>
+                <h2>{t("inviteTitle")}</h2>
+                <p>{t("inviteLead")}</p>
+                <button disabled>{t("inviteSoon")}</button>
+              </section>
+              <div className="summary invite-summary">
+                <div>
+                  <strong>{formatPoints(home.invitedCount, locale)}</strong>
+                  <span>{t("invited")}</span>
                 </div>
-                <p>
-                  邀请奖励以正式公布的有效条件为准，当前不开放新的分享或奖励操作。
-                </p>
+                <div>
+                  <strong>—</strong>
+                  <span>{t("pendingReward")}</span>
+                  <small>{t("rulesUnpublished")}</small>
+                </div>
+              </div>
+              <section className="card">
+                <ol className="journey">
+                  {(["journey1", "journey2", "journey3"] as const).map((k) => (
+                    <li key={k}>{t(k)}</li>
+                  ))}
+                </ol>
+                <p className="muted">{t("journeyNote")}</p>
               </section>
               {history}
+              <div className="placeholder-row card">
+                <span>{t("rules")}</span>
+                <small>{t("soon")}</small>
+              </div>
             </>
           )}
-          {tab === "我的" && (
+          {tab === "me" && (
             <>
-              <section className="card">
-                <h2>{home.profile.displayName}</h2>
-                <p>{home.profile.botName}</p>
-                <p className="muted">{home.profile.projectName}</p>
+              <section className="card profile-card">
+                <span className="avatar large" aria-hidden="true">
+                  {home.profile.displayName.slice(0, 1) || miniBrand.monogram}
+                </span>
+                <div>
+                  <h2>{home.profile.displayName || t("member")}</h2>
+                  <p className="muted">{t("space")}</p>
+                </div>
               </section>
               <section className="card links">
-                <button onClick={() => select("奖励")}>
-                  积分记录 <span>→</span>
+                <button onClick={() => select("rewards")}>
+                  {t("points")}
+                  <span aria-hidden="true">→</span>
                 </button>
-                <button onClick={() => select("邀请")}>
-                  邀请记录 <span>→</span>
+                <button onClick={() => select("invite")}>
+                  {t("inviteHistory")}
+                  <span aria-hidden="true">→</span>
                 </button>
-                <button
-                  onClick={() => {
-                    select("奖励");
-                    setKind("redemptions");
-                    void records("redemptions");
-                  }}
-                >
-                  兑换记录 <span>→</span>
+                <button onClick={() => select("rewards", "redemptions")}>
+                  {t("myRedeem")}
+                  <span aria-hidden="true">→</span>
                 </button>
-                <button onClick={() => setHelp(!help)}>
-                  语言 · 简体中文 <span>→</span>
+                {(["platformAccount", "entitlements"] as const).map((k) => (
+                  <div className="placeholder-row" key={k}>
+                    <span>{t(k)}</span>
+                    <small>{t("soon")}</small>
+                  </div>
+                ))}
+                <button onClick={() => setPanel("language")}>
+                  {t("language")}
+                  <span>{localeNames[locale]} →</span>
                 </button>
-                <button onClick={() => setHelp(!help)}>
-                  帮助 <span>→</span>
+                <button onClick={() => setPanel("help")}>
+                  {t("help")}
+                  <span aria-hidden="true">→</span>
                 </button>
-                {help && (
-                  <p className="muted">
-                    当前测试版提供简体中文。其他语言正在准备。账户或记录问题请联系项目运营人员；不要发送密码或认证信息。
-                  </p>
-                )}
               </section>
               <button
                 className="logout"
@@ -303,52 +477,125 @@ export function MiniApp() {
                 onClick={() =>
                   void run(async () => {
                     await client.logout();
+                    version.current++;
                     setHome(undefined);
                     setPage(undefined);
+                    setPanel(null);
                     setOut(true);
                   })
                 }
               >
-                退出登录
+                {t("logout")}
               </button>
             </>
+          )}
+          {panel && (
+            <section
+              className="card panel"
+              ref={panelRef}
+              tabIndex={-1}
+              role="region"
+              aria-label={t(panel === "games" ? "gameTitle" : panel)}
+            >
+              <div className="card-top">
+                <h2>{t(panel === "games" ? "gameTitle" : panel)}</h2>
+                <button className="text-button" onClick={() => setPanel(null)}>
+                  {t("close")}
+                </button>
+              </div>
+              {panel === "games" ? (
+                <>
+                  <p className="muted">{t("gameBody")}</p>
+                  {(["wheel", "chest", "scratch", "cards"] as const).map(
+                    (k) => (
+                      <div className="placeholder-row" key={k}>
+                        <span>{t(k)}</span>
+                        <small>{t("soon")}</small>
+                      </div>
+                    ),
+                  )}
+                </>
+              ) : panel === "language" ? (
+                <>
+                  <div className="language-options">
+                    {supportedUiLocales.map((l) => (
+                      <button
+                        key={l}
+                        aria-pressed={locale === l}
+                        onClick={() => {
+                          savePreference(miniBrand.appKey, l);
+                          setDevice(l);
+                        }}
+                      >
+                        {localeNames[l]}
+                        {locale === l && <span aria-hidden="true">✓</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="muted">{t("localeDevice")}</p>
+                  {contentLocale(locale) !== locale && (
+                    <p role="status">{t("fallbackNotice")}</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p>{t("helpBody")}</p>
+                  {miniBrand.helpUrl && (
+                    <a
+                      href={miniBrand.helpUrl}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                    >
+                      {t("help")}
+                    </a>
+                  )}
+                </>
+              )}
+            </section>
           )}
         </main>
       )}
       {busy && (
         <p role="status" className="notice">
-          正在读取，请稍候…
+          {t("loading")}
         </p>
       )}
       {error && (
         <aside role="alert" className="notice error">
-          <p>{messages[error.kind]}</p>
-          {error.requestId && <small>支持编号：{error.requestId}</small>}
+          <p>{t(error.kind)}</p>
+          {error.requestId && (
+            <details>
+              <summary>{t("diagnostics")}</summary>
+              <small>
+                {t("supportId")}: {error.requestId}
+              </small>
+            </details>
+          )}
           {!out && error.kind !== "unauthorized" && (
             <button
               disabled={busy}
               onClick={() =>
-                home && (tab === "奖励" || tab === "邀请")
+                home && (tab === "rewards" || tab === "invite")
                   ? void records(kind)
                   : void load()
               }
             >
-              重试
+              {t("retry")}
             </button>
           )}
         </aside>
       )}
       {home && !out && (
-        <nav aria-label="主导航">
-          {tabs.map((t, i) => (
+        <nav aria-label={t("navigation")}>
+          {tabs.map((item, i) => (
             <button
-              key={t}
-              aria-current={t === tab ? "page" : undefined}
+              key={item}
+              aria-current={item === tab ? "page" : undefined}
               disabled={busy}
-              onClick={() => select(t)}
+              onClick={() => select(item)}
             >
               <span aria-hidden="true">{["⌂", "✦", "◇", "↗", "○"][i]}</span>
-              {t}
+              {t(item)}
             </button>
           ))}
         </nav>
@@ -356,4 +603,5 @@ export function MiniApp() {
     </div>
   );
 }
-createRoot(document.getElementById("mini-root")!).render(<MiniApp />);
+const root = document.getElementById("mini-root");
+if (root) createRoot(root).render(<MiniApp />);

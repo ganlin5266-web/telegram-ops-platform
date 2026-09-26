@@ -25,6 +25,10 @@ export type Home = {
     projectName: string;
     botName: string;
     uiLanguage: string;
+    preferredLanguage?: string | null;
+    botLanguage?: string;
+    projectLanguage?: string;
+    telegramLanguage?: string | null;
   };
   points: { accountExists: boolean; balance: string | null };
   invitedCount: string;
@@ -42,7 +46,8 @@ export type Row = {
   points_cost?: string;
 };
 export type Page = { items: Row[]; nextCursor: string | null };
-const APP_KEY = "p1-staging-auth";
+import { miniBrand } from "./brand";
+const APP_KEY = miniBrand.appKey;
 export function createClient(send: typeof fetch = fetch) {
   let token: string | undefined,
     attempted = false;

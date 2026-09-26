@@ -62,6 +62,40 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     page.getByRole("heading", { name: "你好，测试用户" }),
   ).toBeVisible();
   await expect(page.getByRole("navigation")).toHaveCSS("position", "fixed");
+  await expect(page.getByTestId("today-focus")).toContainText(
+    "你的会员中心已经准备好了",
+  );
+  await expect(page.getByTestId("today-focus")).not.toContainText(
+    "暂无积分账户",
+  );
+  await expect(
+    page.getByRole("button", { name: "查看即将开放" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "小游戏 即将开放" }).click();
+  await expect(
+    page.getByRole("heading", { name: "游戏中心即将开放" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+
+  for (const width of [320, 430, 1000]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    expect(
+      await page
+        .locator(".mini-shell")
+        .evaluate((el) => el.getBoundingClientRect().width),
+    ).toBeLessThanOrEqual(480);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  if (process.env.MINI_UI_SCREENSHOT)
+    await page.screenshot({
+      path: process.env.MINI_UI_SCREENSHOT,
+      fullPage: true,
+    });
   for (const tab of ["活动", "奖励", "邀请", "我的"]) {
     await page
       .getByRole("navigation")
@@ -70,8 +104,30 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     await expect(
       page.getByRole("heading", { name: tab, exact: true }),
     ).toBeVisible();
+    if (tab === "活动") {
+      await expect(page.locator(".activity-card")).toHaveCount(4);
+      await expect(
+        page.locator(".activity-card button").first(),
+      ).toBeDisabled();
+    }
+    if (tab === "奖励") {
+      await expect(page.getByText("还没有积分记录")).toBeVisible();
+      await page.getByRole("button", { name: "我的兑换", exact: true }).click();
+      await expect(page.getByText("还没有兑换记录")).toBeVisible();
+    }
+    if (tab === "邀请") {
+      await expect(page.getByText("还没有邀请记录")).toBeVisible();
+      await expect(page.getByText("规则尚未发布")).toBeVisible();
+    }
   }
   await expect(page.locator("body")).not.toContainText("Brand ID");
+  await expect(page.locator("body")).not.toContainText("Staging Test Brand");
+  await expect(page.locator("body")).not.toContainText("P1 Test Bot");
+  await expect(page.locator("body")).not.toContainText(
+    /\b[0-9a-f]{8}-[0-9a-f-]{27}\b/,
+  );
+  await expect(page.getByText("平台账号", { exact: true })).toBeVisible();
+
   await expect(page.locator("body")).not.toContainText(token);
   expect(
     await page.evaluate(
@@ -94,6 +150,29 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     .getByRole("navigation")
     .getByRole("button", { name: "我的", exact: true })
     .click();
+
+  await page.getByRole("button", { name: /语言 ·?|语言 简体中文/ }).click();
+  await page.getByRole("button", { name: "English", exact: true }).click();
+  await expect(page.getByRole("navigation")).toContainText("Rewards");
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Hello, 测试用户" }),
+  ).toBeVisible();
+  expect(exchanges).toBe(1);
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "Me", exact: true })
+    .click();
+  await page.getByRole("button", { name: /Language English/ }).click();
+  await page
+    .getByRole("button", { name: "Português (Brasil)", exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "Full translation is being prepared. English is shown for now.",
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "简体中文", exact: true }).click();
   await page.getByRole("button", { name: "退出登录", exact: true }).click();
   await expect(page.getByRole("heading", { name: "已安全退出" })).toBeVisible();
 });
@@ -108,8 +187,6 @@ test("Mini V1 outside Telegram does not impersonate a user", async ({
     if (r.url().includes("/v1/mini")) requests++;
   });
   await page.goto("/mini.html");
-  await expect(page.getByRole("alert")).toContainText(
-    "请从 FUN_Club_Staging_bot",
-  );
+  await expect(page.getByRole("alert")).toContainText("请从所属 Bot");
   expect(requests).toBe(0);
 });
