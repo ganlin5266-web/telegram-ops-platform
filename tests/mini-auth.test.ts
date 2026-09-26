@@ -154,7 +154,9 @@ test('mini: PostgreSQL-backed throttles shared between app instances, separate f
  const f=await fixture();const adminBucket=miniDigest(randomUUID());
  await db.query('INSERT INTO admin_login_limits(bucket_hash,attempts) VALUES($1,3)',[adminBucket]);
  for(let i=0;i<50;i++) assert.equal((await f.exchange(f.signed(),i%2?f.makeApp():f.app,{appKey:'unknown'})).statusCode,401);
- assert.equal((await f.exchange()).statusCode,429);assert.equal(Number((await one(db,'SELECT attempts FROM admin_login_limits WHERE bucket_hash=$1',[adminBucket])).attempts),3);
+ assert.equal((await f.exchange(f.signed(),f.app,{appKey:'unknown'})).statusCode,429);
+ // P2: valid signed users must not share the anonymous proxy-IP budget.
+ assert.equal((await f.exchange()).statusCode,200);assert.equal(Number((await one(db,'SELECT attempts FROM admin_login_limits WHERE bucket_hash=$1',[adminBucket])).attempts),3);
  const key=randomUUID();for(let i=0;i<10;i++) await miniRateLimit(db,key,10);await assert.rejects(miniRateLimit(db,key,10),/mini_rate_limited/);
 });
 test('mini: audit failure rolls back exchange, user and session; same initData can retry',async()=>{

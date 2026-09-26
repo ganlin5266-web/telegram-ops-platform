@@ -10,6 +10,13 @@ export type MiniUser=z.infer<typeof userSchema>;
 const invalid=()=>new DomainError('mini_invalid_identity',401);
 // No network calls. Never log the input, parsed user or secret.
 export function verifyInitData(raw:string,botToken:string,nowSeconds=Math.floor(Date.now()/1000)) {
+ return verify(raw,botToken,nowSeconds,INIT_MAX_AGE_SECONDS);
+}
+// Only used after an independently authenticated recovery Cookie. Never for exchange.
+export function verifyRecoveryInitData(raw:string,botToken:string,nowSeconds=Math.floor(Date.now()/1000)) {
+ return verify(raw,botToken,nowSeconds,1800+INIT_MAX_AGE_SECONDS);
+}
+function verify(raw:string,botToken:string,nowSeconds:number,maxAge:number) {
  if(!raw || Buffer.byteLength(raw)>16384 || !botToken) throw invalid();
  const fields=new Map<string,string>();
  try {
@@ -30,7 +37,7 @@ export function verifyInitData(raw:string,botToken:string,nowSeconds=Math.floor(
  if(!timingSafeEqual(expected,Buffer.from(hash,'hex'))) throw invalid();
  const date=fields.get('auth_date');if(!date||!/^\d{1,12}$/.test(date)) throw invalid();
  const authDate=Number(date);
- if(!Number.isSafeInteger(authDate)||authDate>nowSeconds+INIT_FUTURE_SKEW_SECONDS||nowSeconds>=authDate+INIT_MAX_AGE_SECONDS) throw invalid();
+ if(!Number.isSafeInteger(authDate)||authDate>nowSeconds+INIT_FUTURE_SKEW_SECONDS||nowSeconds>=authDate+maxAge) throw invalid();
  let user:MiniUser;
  try {user=userSchema.parse(JSON.parse(fields.get('user')??''));} catch {throw invalid();}
  return {user,authDate,payloadDigest:createHash('sha256').update(data).digest('hex')};
