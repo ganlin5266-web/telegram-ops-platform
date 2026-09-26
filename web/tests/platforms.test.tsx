@@ -22,6 +22,7 @@ const identity = {
 function client() {
   let current: typeof identity | null = null;
   return {
+    platformDataStatus: vi.fn(async () => ({ items: [] })),
     platforms: vi.fn(async () => ({
       items: [
         {

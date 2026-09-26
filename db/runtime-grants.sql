@@ -24,3 +24,8 @@ GRANT SELECT,INSERT,UPDATE ON mini_auth_limits TO telegram_app;
 GRANT SELECT,INSERT ON platforms,platform_identities TO telegram_app;
 GRANT UPDATE(status,updated_at) ON platforms TO telegram_app;
 GRANT UPDATE(status,verified_at,verified_by,rejected_at,rejected_by,revoked_at,revoked_by,reason_code,evidence_reference) ON platform_identities TO telegram_app;
+
+-- P4: immutable source/revisions; only explicit activation and current pointers are mutable.
+GRANT SELECT,INSERT ON platform_accounts,platform_import_batches,platform_import_evidence,platform_user_daily_facts,platform_user_daily_fact_revisions TO telegram_app;
+GRANT UPDATE(status,activated_by,activated_at) ON platform_import_batches TO telegram_app;
+GRANT UPDATE(current_revision_id) ON platform_user_daily_facts TO telegram_app;

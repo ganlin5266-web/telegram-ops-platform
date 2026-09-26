@@ -150,6 +150,9 @@ export const zh = {
   uidBind: "绑定账号",
   uidResubmit: "重新提交",
   uidHistory: "绑定历史",
+  platformData: "平台数据",
+  dataUpdatedThrough: "已更新至",
+  dataWaiting: "等待更新",
 } as const;
 export type Key = keyof typeof zh;
 const en: Record<Key, string> = {
@@ -308,6 +311,9 @@ const en: Record<Key, string> = {
   uidBind: "Bind account",
   uidResubmit: "Resubmit",
   uidHistory: "Binding history",
+  platformData: "Platform data",
+  dataUpdatedThrough: "Updated through",
+  dataWaiting: "Waiting for update",
 };
 export const dictionaries: Record<Locale, Partial<Record<Key, string>>> = {
   "zh-CN": zh,

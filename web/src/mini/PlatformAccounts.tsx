@@ -13,6 +13,9 @@ export default function PlatformAccounts({
   client: MiniClient;
   locale: Locale;
 }) {
+  const [dataStatus, setDataStatus] = useState<
+    { platformId: string; latestDate: string | null; status: string }[]
+  >([]);
   const [items, setItems] = useState<MiniPlatform[]>([]),
     [history, setHistory] = useState<PlatformIdentity[]>([]),
     [cursor, setCursor] = useState<string | null>(null),
@@ -36,7 +39,12 @@ export default function PlatformAccounts({
     }
   }
   async function refresh() {
-    const [p, h] = await Promise.all([client.platforms(), client.identities()]);
+    const [p, h, d] = await Promise.all([
+      client.platforms(),
+      client.identities(),
+      client.platformDataStatus(),
+    ]);
+    setDataStatus(d.items);
     setItems(p.items);
     setHistory(h.items);
     setCursor(h.nextCursor);
@@ -92,6 +100,14 @@ export default function PlatformAccounts({
           {p.identity?.status === "pending" && <p>{t("uidPendingHelp")}</p>}
           {p.identity?.status === "verified" && (
             <p className="muted">{t("uidVerifiedHelp")}</p>
+          )}
+          {p.identity?.status === "verified" && (
+            <p>
+              {t("platformData")}:{" "}
+              {dataStatus.find((d) => d.platformId === p.id)?.latestDate
+                ? `${t("dataUpdatedThrough")} ${dataStatus.find((d) => d.platformId === p.id)?.latestDate}`
+                : t("dataWaiting")}
+            </p>
           )}
           {p.identity?.status === "conflict" && <p>{t("uidConflictHelp")}</p>}
           {p.identity?.status === "rejected" && <p>{t("uidRejectedHelp")}</p>}

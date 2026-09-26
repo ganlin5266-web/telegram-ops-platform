@@ -85,6 +85,37 @@ for (const name of ["验收品牌 A", "验收品牌 B"]) {
     );
   }
 }
+// Isolated importer identity keeps the ordinary Admin regression fixture unchanged.
+const importer = await one(
+  db,
+  "INSERT INTO admins(auth_subject,display_name,ui_language) VALUES($1,'验收导入员','zh-CN') RETURNING id",
+  [randomUUID()],
+);
+await db.query(
+  "INSERT INTO admin_credentials(admin_id,login,password_hash) VALUES($1,$2,$3)",
+  [
+    importer.id,
+    process.env.UI_TEST_LOGIN + "-p4",
+    await hashPassword(process.env.UI_TEST_PASSWORD!),
+  ],
+);
+const dataRole = await one(
+  db,
+  "INSERT INTO roles(name) VALUES($1) RETURNING id",
+  ["P4 UI " + randomUUID()],
+);
+await db.query(
+  "INSERT INTO role_permissions(role_id,permission_id) SELECT $1,id FROM permissions WHERE name IN ('platforms.read','platforms.manage','platform_data.read','platform_data.import','platform_data.activate')",
+  [dataRole.id],
+);
+await db.query(
+  "INSERT INTO admin_roles(admin_id,role_id,brand_id) SELECT $2::uuid,role_id,brand_id FROM admin_roles WHERE admin_id=$1",
+  [admin.id, importer.id],
+);
+await db.query(
+  "INSERT INTO admin_roles(admin_id,role_id,brand_id) SELECT DISTINCT $3::uuid,$2::uuid,brand_id FROM admin_roles WHERE admin_id=$1",
+  [admin.id, dataRole.id, importer.id],
+);
 const app = createApp(
   db,
   () => undefined,

@@ -158,6 +158,14 @@ export function createClient(send: typeof fetch = fetch) {
         ),
       );
     },
+    platformDataStatus: () =>
+      call("/platform-data-status") as Promise<{
+        items: {
+          platformId: string;
+          latestDate: string | null;
+          status: string;
+        }[];
+      }>,
     platforms: () => call("/platforms") as Promise<{ items: MiniPlatform[] }>,
     identities: (cursor?: string) =>
       call(

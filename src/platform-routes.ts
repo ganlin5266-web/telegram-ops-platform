@@ -1,3 +1,4 @@
+import {miniDataStatus} from './platform-data.js';
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { DomainError, one, type Database } from "./db.js";
@@ -77,6 +78,7 @@ export function attachMiniPlatforms(
       bindings,
       req.headers.origin,
     );
+  app.get("/platform-data-status", async (req,reply) => { none.parse(req.query); reply.header("Cache-Control","no-store"); return miniDataStatus(db,await auth(req)); });
   app.get("/platforms", async (req) => {
     none.parse(req.query);
     const p = await auth(req);

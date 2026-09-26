@@ -1,3 +1,4 @@
+import DailyData from "./platform-data/DailyData";
 import { useEffect, useRef, useState } from "react";
 import { ApiError, json, operation, request, type Operation } from "./api";
 import PlatformCenter from "./platforms/PlatformCenter";
@@ -392,6 +393,7 @@ export default function App() {
             ["overview", "◫", "总览"],
             ["users", "◎", "Telegram 用户"],
             ["platforms", "▦", "平台管理"],
+            ["daily-data", "▤", "平台数据"],
             ["identities", "✓", "UID绑定审核"],
           ].map(([id, icon, title]) => (
             <button
@@ -499,6 +501,7 @@ export default function App() {
                     overview: "工作台总览",
                     users: "Telegram 用户",
                     platforms: "平台管理",
+                    "daily-data": "平台数据 · 用户日报",
                     identities: "UID绑定审核",
                   }[page]
                 }
@@ -578,6 +581,16 @@ export default function App() {
                 </div>
               </section>
             </>
+          ) : page === "daily-data" ? (
+            bot && !loading && !scopeError ? (
+              <DailyData
+                key={base}
+                base={base}
+                permissions={permissions}
+                csrf={me.csrfToken}
+                onExpire={expire}
+              />
+            ) : null
           ) : page === "platforms" || page === "identities" ? (
             bot && !loading && !scopeError ? (
               <PlatformCenter
