@@ -22,7 +22,7 @@ export function checkIdentity(row:Record<string,unknown>|undefined) {
 function matches(row:Record<string,unknown>,expected:Record<string,unknown>) {
  return Object.entries(expected).every(([key,value])=>JSON.stringify(row[key])===JSON.stringify(value));
 }
-async function verifyMigrations(tx:Queryable) {
+export async function verifyMigrations(tx:Queryable) {
  const rows=(await tx.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows;
  if(rows.length!==migrations.length) throw new SeedError('migration_set_mismatch');
  for(const name of migrations) {
