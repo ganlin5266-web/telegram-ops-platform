@@ -1,3 +1,4 @@
+import {attachAdminPlatforms} from './platform-routes.js';
 import Fastify, {LogController} from 'fastify';
 import {z} from 'zod';
 import {DomainError,one,scopeParams,type Database} from './db.js';
@@ -40,6 +41,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  const base='/v1/brands/:brandId/bots/:botId';
  attachOperationsQueries(app,db,authenticateRequest);
  attachDashboard(app,db,authenticateRequest);
+ attachAdminPlatforms(app,db,authenticateRequest);
  app.get(`${base}/users/:userId/points`,async request=>{
   const s=scopeSchema.extend({userId:z.uuid()}).parse(request.params),p=await authenticateRequest(request);
   return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');await one(tx,'SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND id=$3',[...scopeParams(s),s.userId]);

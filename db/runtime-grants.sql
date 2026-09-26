@@ -20,3 +20,7 @@ GRANT UPDATE(id) ON admins TO telegram_app;
 GRANT SELECT,INSERT ON mini_auth_exchanges,mini_sessions TO telegram_app;
 GRANT UPDATE(revoked_at,revoke_reason) ON mini_sessions TO telegram_app;
 GRANT SELECT,INSERT,UPDATE ON mini_auth_limits TO telegram_app;
+-- P3: no UID/scope/history overwrites, deletes or existing business privilege expansion.
+GRANT SELECT,INSERT ON platforms,platform_identities TO telegram_app;
+GRANT UPDATE(status,updated_at) ON platforms TO telegram_app;
+GRANT UPDATE(status,verified_at,verified_by,rejected_at,rejected_by,revoked_at,revoked_by,reason_code,evidence_reference) ON platform_identities TO telegram_app;

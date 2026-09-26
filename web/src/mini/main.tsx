@@ -16,6 +16,7 @@ import {
   type Locale,
   type Key,
 } from "./i18n";
+import PlatformAccounts from "./PlatformAccounts";
 import "./style.css";
 const tabs = ["home", "activities", "rewards", "invite", "me"] as const;
 type Tab = (typeof tabs)[number];
@@ -35,7 +36,9 @@ export function MiniApp() {
     [out, setOut] = useState(false),
     [kind, setKind] = useState<Kind>("point-ledger"),
     [page, setPage] = useState<Page>(),
-    [panel, setPanel] = useState<"games" | "language" | "help" | null>(null),
+    [panel, setPanel] = useState<
+      "games" | "language" | "help" | "platformAccount" | null
+    >(null),
     [device, setDevice] = useState<Locale | undefined>(() =>
       readPreference(miniBrand.appKey),
     );
@@ -456,12 +459,16 @@ export function MiniApp() {
                   {t("myRedeem")}
                   <span aria-hidden="true">→</span>
                 </button>
-                {(["platformAccount", "entitlements"] as const).map((k) => (
+                {(["entitlements"] as const).map((k) => (
                   <div className="placeholder-row" key={k}>
                     <span>{t(k)}</span>
                     <small>{t("soon")}</small>
                   </div>
                 ))}
+                <button onClick={() => setPanel("platformAccount")}>
+                  {t("platformAccount")}
+                  <span aria-hidden="true">→</span>
+                </button>
                 <button onClick={() => setPanel("language")}>
                   {t("language")}
                   <span>{localeNames[locale]} →</span>
@@ -503,7 +510,9 @@ export function MiniApp() {
                   {t("close")}
                 </button>
               </div>
-              {panel === "games" ? (
+              {panel === "platformAccount" ? (
+                <PlatformAccounts client={client} locale={locale} />
+              ) : panel === "games" ? (
                 <>
                   <p className="muted">{t("gameBody")}</p>
                   {(["wheel", "chest", "scratch", "cards"] as const).map(

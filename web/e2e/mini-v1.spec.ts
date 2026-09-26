@@ -126,7 +126,7 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
   await expect(page.locator("body")).not.toContainText(
     /\b[0-9a-f]{8}-[0-9a-f-]{27}\b/,
   );
-  await expect(page.getByText("平台账号", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "平台账号", exact: true })).toBeVisible();
 
   await expect(page.locator("body")).not.toContainText(token);
   expect(

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, json, operation, request, type Operation } from "./api";
+import PlatformCenter from "./platforms/PlatformCenter";
 import UsersCenter from "./operations/UsersCenter";
 import {
   UserOverview,
@@ -390,6 +391,8 @@ export default function App() {
           {[
             ["overview", "◫", "总览"],
             ["users", "◎", "Telegram 用户"],
+            ["platforms", "▦", "平台管理"],
+            ["identities", "✓", "UID绑定审核"],
           ].map(([id, icon, title]) => (
             <button
               key={id}
@@ -490,7 +493,16 @@ export default function App() {
                 WORKSPACE /{" "}
                 {page === "overview" ? "OVERVIEW" : "TELEGRAM USERS"}
               </div>
-              <h1>{page === "overview" ? "工作台总览" : "Telegram 用户"}</h1>
+              <h1>
+                {
+                  {
+                    overview: "工作台总览",
+                    users: "Telegram 用户",
+                    platforms: "平台管理",
+                    identities: "UID绑定审核",
+                  }[page]
+                }
+              </h1>
               <p className="muted">
                 {page === "overview"
                   ? "查看当前身份、运营范围与连接状态。"
@@ -566,6 +578,17 @@ export default function App() {
                 </div>
               </section>
             </>
+          ) : page === "platforms" || page === "identities" ? (
+            bot && !loading && !scopeError ? (
+              <PlatformCenter
+                key={base + page}
+                base={base}
+                mode={page}
+                permissions={permissions}
+                csrf={me.csrfToken}
+                onExpire={expire}
+              />
+            ) : null
           ) : bot &&
             !loading &&
             !scopeError &&

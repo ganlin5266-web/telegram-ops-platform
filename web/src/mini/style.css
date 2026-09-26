@@ -622,3 +622,4 @@ nav button {
     max-width: 140px;
   }
 }
+.platform-account{padding:18px 0;border-bottom:1px solid #e0e7db}.platform-account button,.platform-accounts>button{border:1px solid #b9cbb4;border-radius:10px;background:#e8efe5;color:#153d32;padding:10px 14px;min-height:44px}.platform-account input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #a9baa4;border-radius:10px;font:inherit;margin-top:8px}.platform-account label{display:block;margin-top:16px}.platform-accounts{padding:14px;margin:10px 0}.platform-account .badge{display:inline-block}.platform-account .badge+p{font-family:monospace}

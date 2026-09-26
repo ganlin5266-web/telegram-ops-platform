@@ -57,6 +57,7 @@ export function createClient(send: typeof fetch = fetch) {
     body?: unknown,
     bearer = token,
     cookies = false,
+    extraHeaders: Record<string, string> = {},
   ): Promise<any> {
     let r: Response;
     try {
@@ -67,6 +68,7 @@ export function createClient(send: typeof fetch = fetch) {
         redirect: "error",
         signal: AbortSignal.timeout(20000),
         headers: {
+          ...extraHeaders,
           ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
           ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
           ...(cookies ? { "X-Mini-CSRF": "1" } : {}),
@@ -156,6 +158,17 @@ export function createClient(send: typeof fetch = fetch) {
         ),
       );
     },
+    platforms: () => call("/platforms") as Promise<{ items: MiniPlatform[] }>,
+    identities: (cursor?: string) =>
+      call(
+        "/platform-identities" +
+          (cursor ? "?cursor=" + encodeURIComponent(cursor) : ""),
+      ) as Promise<{ items: PlatformIdentity[]; nextCursor: string | null }>,
+    submitPlatform: (platformId: string, uid: string, key: string) =>
+      call("/platform-identities", "POST", { platformId, uid }, token, false, {
+        "X-Mini-CSRF": "1",
+        "Idempotency-Key": key,
+      }) as Promise<PlatformIdentity>,
     home: () => call("/home") as Promise<Home>,
     page: (
       kind: "point-ledger" | "referrals" | "redemptions",
@@ -182,3 +195,25 @@ export function createClient(send: typeof fetch = fetch) {
     },
   };
 }
+
+export type PlatformIdentity = {
+  id: string;
+  platformId: string;
+  platformName: string;
+  uidMasked: string;
+  status: "pending" | "verified" | "rejected" | "conflict" | "revoked";
+  submittedAt: string;
+  verifiedAt: string | null;
+};
+export type MiniPlatform = {
+  id: string;
+  display_name: string;
+  code: string;
+  status: string;
+  verification_method: string;
+  uid_format: string;
+  uid_min_length: number;
+  uid_max_length: number;
+  identity: PlatformIdentity | null;
+};
+export type MiniClient = ReturnType<typeof createClient>;

@@ -1,3 +1,4 @@
+import {attachMiniPlatforms} from './platform-routes.js';
 import {recoverMini,recoveryCookie,readRecoveryCookie,requireRecoveryProtection} from './mini-recovery.js';
 import {verifyInitData} from './telegram-init-data.js';
 import {attachMiniQueries} from './mini-queries.js';
@@ -34,8 +35,8 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
   if(req.method==='OPTIONS') {
    const method=String(req.headers['access-control-request-method']);
    const headers=String(req.headers['access-control-request-headers']??'').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
-   if(!origin||!['GET','POST'].includes(method)||headers.some(h=>!['content-type','authorization','x-mini-csrf'].includes(h))) throw new DomainError('mini_cors_denied',403);
-   return reply.header('Access-Control-Allow-Methods','GET, POST').header('Access-Control-Allow-Headers','Content-Type, Authorization, X-Mini-CSRF').code(204).send();
+   if(!origin||!['GET','POST'].includes(method)||headers.some(h=>!['content-type','authorization','x-mini-csrf','idempotency-key'].includes(h))) throw new DomainError('mini_cors_denied',403);
+   return reply.header('Access-Control-Allow-Methods','GET, POST').header('Access-Control-Allow-Headers','Content-Type, Authorization, X-Mini-CSRF, Idempotency-Key').code(204).send();
   }
   if(!['GET','HEAD'].includes(req.method)) {
    if(!origin) throw new DomainError('mini_origin_required',403);
@@ -43,7 +44,7 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
   }
  });
  // Explicit preflight routes: no catch-all business API or administrator exemption.
- for(const url of ['/auth/exchange','/me','/auth/logout','/auth/recover']) app.options(url,async()=>({}));
+ for(const url of ['/auth/exchange','/me','/auth/logout','/auth/recover','/platforms','/platform-identities']) app.options(url,async()=>({}));
  app.post('/auth/exchange',{bodyLimit:20000},async(req,reply)=>{
   empty.parse(req.query);const body=exchangeBody.parse(req.body);
   const binding=config.bindings.find(b=>b.appKey===body.appKey);
@@ -68,6 +69,7 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
   catch(error) {reply.header('Set-Cookie',recoveryCookie('',0));throw error;}
  });
  attachMiniQueries(app,db,config.bindings);
+ attachMiniPlatforms(app,db,config.bindings);
  app.get('/me',async req=>{
   empty.parse(req.query);
   const p=await authenticateMini(db,req.headers.authorization,config.bindings,req.headers.origin);
