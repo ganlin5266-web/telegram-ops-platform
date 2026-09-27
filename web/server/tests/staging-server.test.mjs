@@ -11,7 +11,7 @@ import { createStagingServer, readConfig } from '../staging-server.mjs';
 
 const targetHost = 'telegram-ops-platform.onrender.com';
 let dir, upstream, server, agent, port, tlsOptions;
-let captured = [], calls = 0;
+let captured = [], calls = 0, diagnostics = [];
 const listen = server => new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', () => resolve(server.address().port)); });
 const close = server => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); });
 function request(path, { method = 'GET', headers = {}, body, serverPort = port } = {}) {
@@ -43,6 +43,7 @@ before(async () => {
     const parts = []; for await (const chunk of req) parts.push(chunk);
     captured.push({ method: req.method, url: req.url, headers: req.headers, body: Buffer.concat(parts).toString() });
     if (req.url === '/v1/timeout') return;
+    if (req.url === '/v1/html-error') { res.writeHead(502, { 'content-type': 'text/html; sensitive=CANARY', 'x-proxy-request-id': 'CANARY' }); res.end('<html>upstream failure</html>'); return; }
     if (req.url === '/v1/broken') { req.socket.destroy(); return; }
     if (req.url === '/v1/redirect') { res.writeHead(307, { location: 'https://example.invalid/never-follow' }); res.end(); return; }
     if (req.url === '/v1/cookies') {
@@ -64,7 +65,7 @@ before(async () => {
     return tls.connect({ ...options, host: '127.0.0.1', port: upstreamPort,
       servername: targetHost, ca: tlsOptions.cert, rejectUnauthorized: true });
   };
-  server = await createStagingServer({ dist: join(dir, 'dist'), agent, timeoutMs: 300 });
+  server = await createStagingServer({ dist: join(dir, 'dist'), agent, timeoutMs: 300, diagnostic: record => diagnostics.push(record) });
   port = await listen(server);
 });
 after(async () => { await close(server); await close(upstream); agent.destroy(); await rm(dir, { recursive: true, force: true }); });
@@ -189,4 +190,63 @@ test('CLI invalid configuration fails without printing environment values', () =
   const result = spawnSync(process.execPath, ['web/server/staging-server.mjs'], {
     cwd: new URL('../../../', import.meta.url), env: { ...process.env, PORT: 'invalid', VITE_API_BASE: 'synthetic-sensitive-canary' }, encoding: 'utf8' });
   assert.notEqual(result.status, 0); assert.doesNotMatch(result.stdout + result.stderr, /synthetic-sensitive-canary/);
+});
+
+test('diagnostics correlate start and completion without credentials, query or arbitrary path leakage', async () => {
+  const start = diagnostics.length;
+  const response = await request('/v1/private-CANARY?initData=CANARY', { method: 'POST',
+    headers: { cookie: 'CANARY', authorization: 'Bearer CANARY', 'x-csrf-token': 'CANARY', 'x-proxy-request-id': 'CANARY' }, body: 'CANARY' });
+  const records = diagnostics.slice(start);
+  assert.equal(records.length, 2);
+  assert.equal(records[0].phase, 'upstream_start');
+  const end = records[1];
+  assert.equal(end.phase, 'complete'); assert.equal(end.classification, 'upstream_response');
+  assert.equal(end.correlation_id, response.headers['x-proxy-request-id']);
+  assert.equal(records[0].correlation_id, end.correlation_id);
+  assert.match(end.correlation_id, /^[a-f0-9-]{36}$/);
+  assert.equal(end.safe_path, '/v1/:redacted'); assert.equal(end.method, 'POST');
+  assert.equal(end.upstream_status, 200); assert.equal(end.proxy_status, 200);
+  assert.equal(end.upstream_content_type, 'application/json');
+  assert.equal(end.socket_reused, false);
+  assert.ok(end.total_ms >= end.upstream_headers_ms);
+  assert.ok(end.upstream_end_ms !== null);
+  assert.doesNotMatch(JSON.stringify(records), /CANARY|initData|cookie|authorization|csrf/i);
+});
+test('upstream HTML error is distinguished from local proxy errors and cannot inject correlation', async () => {
+  const response = await request('/v1/html-error');
+  const end = diagnostics.at(-1);
+  assert.equal(response.status, 502); assert.equal(end.classification, 'upstream_http_error');
+  assert.equal(end.upstream_content_type, 'text/html'); assert.equal(end.upstream_status, 502);
+  assert.equal(response.headers['x-proxy-request-id'], end.correlation_id);
+  assert.doesNotMatch(JSON.stringify(end), /CANARY/);
+});
+test('timeout and network failure have distinct safe diagnostics, one completion and no POST retry', async () => {
+  for (const [path, expected] of [['/v1/timeout','proxy_timeout'], ['/v1/broken','upstream_network_error']]) {
+    const start = diagnostics.length, initial = calls;
+    await request(path, { method: 'POST' });
+    const records = diagnostics.slice(start), end = records.at(-1);
+    assert.equal(records.filter(r => r.phase === 'complete').length, 1);
+    assert.equal(end.classification, expected); assert.equal(calls, initial + 1);
+    assert.equal(end.upstream_status, null);
+    if (expected === 'proxy_timeout') assert.equal(end.timeout_classification, 'proxy_total_timeout');
+    else assert.equal(end.network_error_code, 'ECONNRESET');
+  }
+});
+test('diagnostic sink failure cannot break proxy behavior', async () => {
+  const front = await createStagingServer({ dist: join(dir, 'dist'), agent, diagnostic: () => { throw Error('sink unavailable'); } });
+  try { assert.equal((await request('/v1/me', { serverPort: await listen(front) })).status, 200); }
+  finally { await close(front); }
+});
+test('diagnostics report socket reuse when keep-alive agent supplies a pooled socket', async () => {
+  const pooled = new https.Agent({ keepAlive: true, maxSockets: 1 });
+  pooled.createConnection = options => tls.connect({ ...options, host: '127.0.0.1',
+    port: upstream.address().port, servername: targetHost, ca: tlsOptions.cert, rejectUnauthorized: true });
+  const records = [];
+  const front = await createStagingServer({ dist: join(dir, 'dist'), agent: pooled, diagnostic: r => records.push(r) });
+  try {
+    const serverPort = await listen(front);
+    await request('/v1/me', { serverPort }); await request('/v1/me', { serverPort });
+    const ends = records.filter(r => r.phase === 'complete');
+    assert.equal(ends[0].socket_reused, false); assert.equal(ends[1].socket_reused, true);
+  } finally { await close(front); pooled.destroy(); }
 });

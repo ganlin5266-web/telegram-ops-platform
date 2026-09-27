@@ -1,5 +1,6 @@
 import http from 'node:http';
 import https from 'node:https';
+import { randomUUID } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { resolve, sep, extname } from 'node:path';
@@ -36,10 +37,23 @@ function apiError(res, status, code) {
   res.end(JSON.stringify({ error: code }));
 }
 
+// Only fixed route labels enter logs; arbitrary path segments and all query data are omitted.
+const diagnosticPaths = new Set(['/v1', '/v1/', '/v1/me', '/v1/auth/login', '/v1/auth/logout',
+  '/v1/mini/me', '/v1/mini/auth/exchange', '/v1/mini/auth/logout']);
+const networkCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN',
+  'ECONNREFUSED', 'EPIPE', 'ERR_STREAM_PREMATURE_CLOSE', 'CERT_HAS_EXPIRED',
+  'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'ERR_TLS_CERT_ALTNAME_INVALID']);
+function safeNetworkCode(error) { return networkCodes.has(error?.code) ? error.code : 'OTHER'; }
+function safeContentType(value) {
+  const mime = String(value ?? '').split(';')[0].trim().toLowerCase();
+  return ['application/json', 'text/html', 'text/plain', 'application/octet-stream'].includes(mime)
+    ? mime : (mime ? 'other' : 'absent');
+}
+
 // agent is an in-process TLS transport seam for isolated integration tests only.
 // No request header, environment variable or config field can change the upstream.
 export async function createStagingServer({ dist = defaultDist, configPath = defaultConfig,
-  agent, timeoutMs = 15000 } = {}) {
+  agent, timeoutMs = 15000, diagnostic = record => console.log(JSON.stringify(record)) } = {}) {
   const config = await readConfig(configPath);
   if (process.env.VITE_API_BASE) throw new Error('VITE_API_BASE must be empty');
   if (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0') throw new Error('Strict TLS required');
@@ -59,6 +73,28 @@ export async function createStagingServer({ dist = defaultDist, configPath = def
     catch { apiError(res, 400, 'invalid_path'); return; }
     const isApi = path === '/v1' || path.startsWith('/v1/');
     if (isApi) {
+      const correlationId = randomUUID();
+      const started = performance.now();
+      const elapsed = () => Math.round(performance.now() - started);
+      const base = { event: 'staging_proxy', correlation_id: correlationId,
+        method: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'].includes(req.method) ? req.method : 'OTHER',
+        safe_path: diagnosticPaths.has(path) ? path : '/v1/:redacted' };
+      const state = { upstream_status: null, upstream_content_type: null, network_error_code: null,
+        timeout_classification: null, socket_reused: null, upstream_headers_ms: null,
+        upstream_end_ms: null, classification: 'upstream_pending' };
+      let finalized = false;
+      const emit = fields => { try { diagnostic({ ...base, ...fields }); } catch { /* Diagnostics cannot affect transport. */ } };
+      const finish = outcome => {
+        if (finalized) return;
+        finalized = true;
+        emit({ phase: 'complete', timestamp: new Date().toISOString(), total_ms: elapsed(),
+          ...state, classification: outcome ?? state.classification,
+          proxy_status: res.headersSent ? res.statusCode : null });
+      };
+      res.setHeader('x-proxy-request-id', correlationId);
+      emit({ phase: 'upstream_start', timestamp: new Date().toISOString() });
+      res.once('finish', () => finish());
+      res.once('close', () => finish(res.writableFinished ? undefined : 'downstream_closed'));
       const headers = cleanHeaders(req.headers);
       headers.host = upstream.host;
       // Untrusted forwarding metadata must not influence upstream interpretation.
@@ -70,14 +106,22 @@ export async function createStagingServer({ dist = defaultDist, configPath = def
         port: 443, servername: upstream.hostname, method: req.method, path: raw,
         headers, agent, rejectUnauthorized: true }, incoming => {
         reply = incoming;
+        state.upstream_status = incoming.statusCode ?? null;
+        state.upstream_content_type = safeContentType(incoming.headers['content-type']);
+        state.upstream_headers_ms = elapsed();
+        state.classification = incoming.statusCode >= 400 ? 'upstream_http_error' : 'upstream_response';
+        incoming.once('end', () => { state.upstream_end_ms = elapsed(); });
         const responseHeaders = cleanHeaders(incoming.headers);
+        responseHeaders['x-proxy-request-id'] = correlationId;
         responseHeaders['cache-control'] = 'no-store';
         responseHeaders['x-content-type-options'] = 'nosniff';
         res.writeHead(incoming.statusCode ?? 502, responseHeaders);
-        incoming.on('error', () => { outgoing.destroy(); apiError(res, 502, 'upstream_unavailable'); });
+        incoming.on('error', error => { state.network_error_code = safeNetworkCode(error); state.classification = 'upstream_response_error'; outgoing.destroy(); apiError(res, 502, 'upstream_unavailable'); });
         incoming.pipe(res);
       });
+      outgoing.once('socket', () => { state.socket_reused = outgoing.reusedSocket === true; });
       const timer = setTimeout(() => {
+        state.timeout_classification = 'proxy_total_timeout'; state.classification = 'proxy_timeout';
         apiError(res, 504, 'upstream_timeout'); outgoing.destroy(); reply?.destroy();
       }, timeoutMs);
       const cleanup = () => { clearTimeout(timer); };
@@ -85,7 +129,7 @@ export async function createStagingServer({ dist = defaultDist, configPath = def
       res.on('close', () => { cleanup(); outgoing.destroy(); reply?.destroy(); });
       req.on('aborted', () => outgoing.destroy());
       req.on('error', () => outgoing.destroy());
-      outgoing.on('error', () => { cleanup(); apiError(res, 502, 'upstream_unavailable'); });
+      outgoing.on('error', error => { cleanup(); if (!finalized && !state.timeout_classification) { state.network_error_code = safeNetworkCode(error); state.classification = 'upstream_network_error'; } apiError(res, 502, 'upstream_unavailable'); });
       req.pipe(outgoing);
       return;
     }
