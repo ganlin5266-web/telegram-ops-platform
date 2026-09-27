@@ -29,3 +29,9 @@ GRANT UPDATE(status,verified_at,verified_by,rejected_at,rejected_by,revoked_at,r
 GRANT SELECT,INSERT ON platform_accounts,platform_import_batches,platform_import_evidence,platform_user_daily_facts,platform_user_daily_fact_revisions TO telegram_app;
 GRANT UPDATE(status,activated_by,activated_at) ON platform_import_batches TO telegram_app;
 GRANT UPDATE(current_revision_id) ON platform_user_daily_facts TO telegram_app;
+
+-- P5-A: cutover/openings remain owner-only. Balances are allocation-trigger projections.
+GRANT SELECT ON point_lot_cutovers,point_lot_openings TO telegram_app;
+GRANT SELECT,INSERT ON point_expiry_policies,point_expiry_policy_versions,point_lots,point_lot_allocations TO telegram_app;
+GRANT UPDATE(status,published_at,published_by) ON point_expiry_policy_versions TO telegram_app;
+GRANT UPDATE(id) ON point_lots TO telegram_app;

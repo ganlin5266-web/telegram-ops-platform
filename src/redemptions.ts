@@ -29,6 +29,7 @@ export async function failRedemption(tx:Queryable,s:Scope,orderId:string,reason:
  if(order.status==='failed') return order;
  if(!['pending','processing'].includes(order.status)) throw new DomainError('invalid_order_state');
  if((await tx.query('SELECT id FROM redemption_codes WHERE redemption_id=$1',[orderId])).rows.length) throw new DomainError('assigned_code_requires_manual_reconciliation');
- await postPoints(tx,{...s,userId:order.user_id,delta:String(order.points_cost),source:'redemption',businessType:'redemption_refund',businessId:order.id,idempotencyKey:`refund:${order.id}`,note:reason});
+ const original=await one(tx,"SELECT id FROM point_ledger WHERE brand_id=$1 AND bot_id=$2 AND business_type='redemption_debit' AND business_id=$3",[s.brandId,s.botId,order.id]);
+ await postPoints(tx,{...s,refundLedgerId:original.id,userId:order.user_id,delta:String(order.points_cost),source:'redemption',businessType:'redemption_refund',businessId:order.id,idempotencyKey:`refund:${order.id}`,note:reason});
  return one(tx,`UPDATE redemptions SET status='failed',failure_reason=$2,updated_at=now() WHERE id=$1 RETURNING *`,[orderId,reason]);
 }

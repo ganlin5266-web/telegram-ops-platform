@@ -1,3 +1,4 @@
+import {pointSummary,lotsEnabled} from './point-lots.js';
 import type {FastifyInstance} from 'fastify';
 import {z} from 'zod';
 import {one,type Database} from './db.js';
@@ -8,8 +9,8 @@ const noQuery=z.object({}).strict();
 export function attachMiniQueries(app:FastifyInstance,db:Database,bindings:MiniAppBinding[]) {
  const auth=(req:any)=>authenticateMini(db,req.headers.authorization,bindings,req.headers.origin);
  const points=async(p:MiniPrincipal)=>{
-  const row=(await db.query('SELECT balance::text FROM point_accounts WHERE brand_id=$1 AND bot_id=$2 AND user_id=$3',[p.brandId,p.botId,p.userId])).rows[0];
-  return {accountExists:!!row,balance:row?String(row.balance):null};
+  const summary=await pointSummary(db,p);
+  return {accountExists:summary.accountExists,balance:summary.availableBalance,...(lotsEnabled()?{expiringSoon:summary.expiringSoon}:{})};
  };
  const activities=()=>({items:[],participationEnabled:false,catalogueStatus:'not_published'});
  app.get('/home',async req=>{

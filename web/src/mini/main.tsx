@@ -367,7 +367,7 @@ export function MiniApp() {
           {tab === "rewards" && (
             <>
               <section className="hero points-card">
-                <span className="pill">{t("points")}</span>
+                <span className="pill">{t("availablePoints")}</span>
                 <div className="balance">
                   {balance}
                   <small> {t("pointsUnit")}</small>
@@ -380,6 +380,13 @@ export function MiniApp() {
                   )}
                 </p>
               </section>
+              {home.points.expiringSoon && home.points.expiringSoon !== "0" && (
+                <p>
+                  {t("pointsExpiring", {
+                    amount: formatPoints(home.points.expiringSoon, locale),
+                  })}
+                </p>
+              )}
               <div className="reward-actions">
                 <button
                   aria-pressed={kind === "point-ledger"}

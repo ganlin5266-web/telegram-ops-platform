@@ -129,3 +129,18 @@ test('V2.1 home exposes only own locale inputs without modifying message languag
  assert.equal((await f.get(token,'home?userId='+randomUUID())).statusCode,400);
  assert.equal((await one(db,'SELECT preferred_language FROM telegram_users WHERE id=$1',[uid])).preferred_language,'pt-BR');
 });
+test('P5-A Mini available points remain own-scope and never expose lots or policies',async()=>{
+ const {cutoverBot}=await import('../src/point-lot-maintenance.js');const {createPolicy,publishPolicy}=await import('../src/point-lots.js');
+ const f=await fixture(),a=(await f.exchange()).json().token,b=(await f.exchange(f.signed(122))).json().token;
+ const userId=(await f.get(a,'me')).json().userId,s={brandId:f.brand.id,botId:f.bot.id};
+ const admin=await one(db,"INSERT INTO admins(auth_subject,display_name) VALUES($1,'TEST') RETURNING id",[randomUUID()]);
+ await db.transaction(tx=>cutoverBot(tx,s));
+ await db.transaction(async tx=>{const p=await createPolicy(tx,s,admin.id,{name:'TEST',source:'*',mode:'permanent',timezone:'UTC',effectiveAt:new Date(Date.now()-1000).toISOString()},'test');await publishPolicy(tx,s,admin.id,p.id,'test');});
+ process.env.POINT_LOTS_ENABLED='true';
+ try{
+  await db.transaction(tx=>postPoints(tx,{...s,userId,delta:'100',source:'test',businessType:'test',businessId:randomUUID(),idempotencyKey:randomUUID()}));
+  const result=await f.get(a,'points');assert.equal(result.statusCode,200);assert.deepEqual(result.json(),{accountExists:true,balance:'100',expiringSoon:'0'});
+  assert.equal((await f.get(b,'points')).json().accountExists,false);
+  assert.equal((await f.get(a,'points?userId='+userId)).statusCode,400);
+ }finally{delete process.env.POINT_LOTS_ENABLED;}
+});

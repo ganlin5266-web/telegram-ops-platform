@@ -1,3 +1,4 @@
+import PointExpiry from "./point-expiry/PointExpiry";
 import DailyData from "./platform-data/DailyData";
 import { useEffect, useRef, useState } from "react";
 import { ApiError, json, operation, request, type Operation } from "./api";
@@ -394,6 +395,7 @@ export default function App() {
             ["users", "◎", "Telegram 用户"],
             ["platforms", "▦", "平台管理"],
             ["daily-data", "▤", "平台数据"],
+            ["point-expiry", "◷", "积分有效期"],
             ["identities", "✓", "UID绑定审核"],
           ].map(([id, icon, title]) => (
             <button
@@ -501,6 +503,7 @@ export default function App() {
                     overview: "工作台总览",
                     users: "Telegram 用户",
                     platforms: "平台管理",
+                    "point-expiry": "积分有效期",
                     "daily-data": "平台数据 · 用户日报",
                     identities: "UID绑定审核",
                   }[page]
@@ -581,6 +584,16 @@ export default function App() {
                 </div>
               </section>
             </>
+          ) : page === "point-expiry" ? (
+            bot && !loading && !scopeError ? (
+              <PointExpiry
+                key={base}
+                base={base}
+                permissions={permissions}
+                csrf={me.csrfToken}
+                onExpire={expire}
+              />
+            ) : null
           ) : page === "daily-data" ? (
             bot && !loading && !scopeError ? (
               <DailyData

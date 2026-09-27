@@ -1,3 +1,5 @@
+import {attachPointExpiry} from './point-expiry-routes.js';
+import {pointSummary,lotsEnabled} from './point-lots.js';
 import {attachPlatformData} from './platform-data-routes.js';
 import {attachAdminPlatforms} from './platform-routes.js';
 import Fastify, {LogController} from 'fastify';
@@ -44,14 +46,15 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  attachDashboard(app,db,authenticateRequest);
  attachAdminPlatforms(app,db,authenticateRequest);
  attachPlatformData(app,db,authenticateRequest);
+ attachPointExpiry(app,db,authenticateRequest);
  app.get(`${base}/users/:userId/points`,async request=>{
   const s=scopeSchema.extend({userId:z.uuid()}).parse(request.params),p=await authenticateRequest(request);
   return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');await one(tx,'SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND id=$3',[...scopeParams(s),s.userId]);
-   const row=(await tx.query('SELECT balance::text FROM point_accounts WHERE brand_id=$1 AND bot_id=$2 AND user_id=$3',[...scopeParams(s),s.userId])).rows[0];return {balance:row?.balance??'0'};});
+   const summary=await pointSummary(tx,s);return lotsEnabled()?{...summary,balance:summary.balance??'0'}:{balance:summary.balance??'0'};});
  });
  app.post(`${base}/points/adjustments`,async request=>{
   const s=scopeSchema.parse(request.params),p=await authenticateRequest(request);
-  const body=z.object({userId:z.uuid(),delta:z.string().regex(/^-?[1-9]\d*$/).max(20),eventId:z.uuid(),note:z.string().min(1).max(500)}).strict().parse(request.body);
+  const body=z.object({userId:z.uuid(),delta:z.string().regex(/^-?[1-9]\d*$/).max(20),eventId:z.uuid(),note:z.string().min(1).max(500),policyVersionId:z.uuid().optional()}).strict().parse(request.body);
   const key=z.string().min(8).max(160).parse(request.headers['idempotency-key']);
   return db.transaction(async tx=>{await authorize(tx,p,s,'points.adjust');
    const ledger=await postPoints(tx,{...s,...body,source:'admin',businessType:'manual_adjustment',businessId:body.eventId,idempotencyKey:key});

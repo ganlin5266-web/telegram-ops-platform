@@ -7,6 +7,13 @@ export class ApiError extends Error {
   }
 }
 export function message(status: number, code = ""): string {
+  if (code === "insufficient_available_points") return "可用积分不足";
+  if (code === "point_expiry_policy_required")
+    return "当前来源未配置积分有效期策略，请先发布策略";
+  if (code === "point_lot_cutover_required")
+    return "积分批次切换尚未完成，请联系管理员";
+  if (code === "point_reconciliation_mismatch")
+    return "积分对账异常，已停止本次操作，请联系管理员";
   if (code === "invalid_cursor") return "查询条件已变化，请重新加载。";
   if (code === "invalid_credentials") return "登录信息错误或账号不可用";
   if (code === "csrf_failed") return "安全验证已失效，请重新登录后操作";

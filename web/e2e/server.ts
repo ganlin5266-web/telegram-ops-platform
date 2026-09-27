@@ -105,7 +105,7 @@ const dataRole = await one(
   ["P4 UI " + randomUUID()],
 );
 await db.query(
-  "INSERT INTO role_permissions(role_id,permission_id) SELECT $1,id FROM permissions WHERE name IN ('platforms.read','platforms.manage','platform_data.read','platform_data.import','platform_data.activate')",
+  "INSERT INTO role_permissions(role_id,permission_id) SELECT $1,id FROM permissions WHERE name IN ('platforms.read','platforms.manage','platform_data.read','platform_data.import','platform_data.activate','points.expiry.read','points.expiry.manage')",
   [dataRole.id],
 );
 await db.query(

@@ -30,7 +30,11 @@ export type Home = {
     projectLanguage?: string;
     telegramLanguage?: string | null;
   };
-  points: { accountExists: boolean; balance: string | null };
+  points: {
+    accountExists: boolean;
+    balance: string | null;
+    expiringSoon?: string;
+  };
   invitedCount: string;
   redemptionCount: string;
   activities: { participationEnabled: boolean };
