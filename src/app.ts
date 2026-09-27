@@ -1,3 +1,4 @@
+import {attachEntitlements} from './entitlement-routes.js';
 import {attachPointExpiry} from './point-expiry-routes.js';
 import {pointSummary,lotsEnabled} from './point-lots.js';
 import {attachPlatformData} from './platform-data-routes.js';
@@ -47,6 +48,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  attachAdminPlatforms(app,db,authenticateRequest);
  attachPlatformData(app,db,authenticateRequest);
  attachPointExpiry(app,db,authenticateRequest);
+ attachEntitlements(app,db,authenticateRequest);
  app.get(`${base}/users/:userId/points`,async request=>{
   const s=scopeSchema.extend({userId:z.uuid()}).parse(request.params),p=await authenticateRequest(request);
   return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');await one(tx,'SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND id=$3',[...scopeParams(s),s.userId]);

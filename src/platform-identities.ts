@@ -1,3 +1,4 @@
+import {enqueueEntitlementSourceChange} from './entitlements.js';
 import { z } from "zod";
 import {
   DomainError,
@@ -341,6 +342,7 @@ export async function reviewIdentity(
       p.adminId,
       v.reasonCode,
     );
+    await enqueueEntitlementSourceChange(tx,s.brandId,r.platform_id,'identity_change',`${id}:${target}`,undefined,r.user_id,s.botId);
     return safeIdentity(
       { ...updated, display_name: platform.display_name },
       true,

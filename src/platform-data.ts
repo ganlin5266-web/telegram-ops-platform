@@ -1,3 +1,4 @@
+import {enqueueEntitlementSourceChange} from './entitlements.js';
 import {
   adapterDefinition,
   mappingSnapshot,
@@ -161,7 +162,7 @@ export async function preflightImport(
       }
       const bound = (
         await tx.query(
-          "SELECT id FROM platform_identities WHERE brand_id=$1 AND platform_id=$2 AND platform_uid=$3 AND status='verified'",
+          "SELECT id,user_id,bot_id FROM platform_identities WHERE brand_id=$1 AND platform_id=$2 AND platform_uid=$3 AND status='verified'",
           [s.brandId, v.platformId, n.normalized.uid],
         )
       ).rows[0];
@@ -346,7 +347,7 @@ export async function activateImport(
       if (current?.value_digest === hash) continue;
       const identity = (
         await tx.query(
-          "SELECT id FROM platform_identities WHERE brand_id=$1 AND platform_id=$2 AND platform_uid=$3 AND status='verified'",
+          "SELECT id,user_id,bot_id FROM platform_identities WHERE brand_id=$1 AND platform_id=$2 AND platform_uid=$3 AND status='verified'",
           [s.brandId, batch.platform_id, n.uid],
         )
       ).rows[0];
@@ -375,6 +376,7 @@ export async function activateImport(
         "UPDATE platform_user_daily_facts SET current_revision_id=$2 WHERE id=$1",
         [fact.id, r.id],
       );
+      if(identity) await enqueueEntitlementSourceChange(tx,s.brandId,batch.platform_id,'fact_revision',r.id,String(batch.business_date).slice(0,10),identity.user_id,identity.bot_id);
       if (current) oldBatches.add(current.batch_id);
       revisions++;
     }

@@ -1,3 +1,4 @@
+import Entitlements from "./entitlements/Entitlements";
 import PointExpiry from "./point-expiry/PointExpiry";
 import DailyData from "./platform-data/DailyData";
 import { useEffect, useRef, useState } from "react";
@@ -396,6 +397,7 @@ export default function App() {
             ["platforms", "▦", "平台管理"],
             ["daily-data", "▤", "平台数据"],
             ["point-expiry", "◷", "积分有效期"],
+            ["entitlements", "◇", "会员权益"],
             ["identities", "✓", "UID绑定审核"],
           ].map(([id, icon, title]) => (
             <button
@@ -504,6 +506,7 @@ export default function App() {
                     users: "Telegram 用户",
                     platforms: "平台管理",
                     "point-expiry": "积分有效期",
+                    "entitlements": "会员权益",
                     "daily-data": "平台数据 · 用户日报",
                     identities: "UID绑定审核",
                   }[page]
@@ -584,6 +587,8 @@ export default function App() {
                 </div>
               </section>
             </>
+          ) : page === "entitlements" ? (
+            bot && !loading && !scopeError ? <Entitlements key={base} base={base} permissions={permissions} csrf={me.csrfToken} onExpire={expire}/> : null
           ) : page === "point-expiry" ? (
             bot && !loading && !scopeError ? (
               <PointExpiry

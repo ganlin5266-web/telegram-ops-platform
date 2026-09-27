@@ -35,3 +35,10 @@ GRANT SELECT ON point_lot_cutovers,point_lot_openings TO telegram_app;
 GRANT SELECT,INSERT ON point_expiry_policies,point_expiry_policy_versions,point_lots,point_lot_allocations TO telegram_app;
 GRANT UPDATE(status,published_at,published_by) ON point_expiry_policy_versions TO telegram_app;
 GRANT UPDATE(id) ON point_lots TO telegram_app;
+
+-- P5-B: immutable qualification history; no new rights on P1-P5-A business tables.
+GRANT SELECT,INSERT ON entitlement_rules,entitlement_rule_versions,entitlement_rule_tiers,daily_entitlements,daily_entitlement_revisions,entitlement_evaluation_tasks,entitlement_sla_findings TO telegram_app;
+GRANT UPDATE(status,published_at,published_by,retired_at) ON entitlement_rule_versions TO telegram_app;
+GRANT UPDATE(current_revision_id) ON daily_entitlements TO telegram_app;
+GRANT UPDATE(status,attempts,next_attempt_at,lease_until,lease_token,last_error_code,outcome,completed_at) ON entitlement_evaluation_tasks TO telegram_app;
+GRANT UPDATE(resolved_at) ON entitlement_sla_findings TO telegram_app;
