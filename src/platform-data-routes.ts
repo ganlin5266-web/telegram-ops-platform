@@ -1,3 +1,4 @@
+import { adapterOptions } from "./platform-adapters.js";
 import { z } from "zod";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { one, type Database } from "./db.js";
@@ -33,6 +34,16 @@ export function attachPlatformData(
   auth: (req: FastifyRequest) => Promise<Principal>,
 ) {
   const base = "/v1/brands/:brandId/bots/:botId/platform-data";
+  app.get(base + "/adapters", async (req) => {
+    none.parse(req.query);
+    await dataAuthorize(
+      db,
+      await auth(req),
+      scope.parse(req.params),
+      "platform_data.import",
+    );
+    return { items: adapterOptions() };
+  });
   app.post(base + "/preflight", { bodyLimit: 3000000 }, async (req) => {
     none.parse(req.query);
     return preflightImport(
@@ -186,7 +197,7 @@ export function attachPlatformData(
     );
     const revisions = (
       await db.query(
-        "SELECT id,data_version,supersedes,batch_id,evidence_id,identity_id,reason,imported_at,normalized FROM platform_user_daily_fact_revisions WHERE brand_id=$1 AND fact_id=$2 ORDER BY data_version DESC",
+        "SELECT r.id,r.data_version,r.supersedes,r.batch_id,r.evidence_id,r.identity_id,r.reason,r.imported_at,r.normalized,b.mapping AS mapping_snapshot FROM platform_user_daily_fact_revisions r JOIN platform_import_batches b ON b.id=r.batch_id WHERE r.brand_id=$1 AND r.fact_id=$2 ORDER BY r.data_version DESC",
         [s.brandId, s.id],
       )
     ).rows;

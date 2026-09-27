@@ -119,3 +119,46 @@ it("Mini platform status shows safe update date, no financial facts", async () =
   expect(await screen.findByText("平台数据: 已更新至 2026-09-26")).toBeTruthy();
   expect(document.body.textContent).not.toContain("100.00");
 });
+it("adapter choice is explicit and preview shows version without activating", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async (path: string) =>
+        new Response(
+          JSON.stringify(
+            path.endsWith("/platforms")
+              ? {
+                  items: [
+                    {
+                      id: "p",
+                      display_name: "Synthetic",
+                      code: "TEST",
+                      timezone: "America/Sao_Paulo",
+                      currency: "BRL",
+                    },
+                  ],
+                }
+              : { items: [], nextOffset: null },
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+    ),
+  );
+  render(
+    <DailyData
+      base="/v1/scope"
+      csrf="test"
+      permissions={["platform_data.read", "platform_data.import"]}
+      onExpire={() => {}}
+    />,
+  );
+  const select = await screen.findByRole("combobox", { name: "报表适配版本" });
+  await userEvent.selectOptions(select, "player-report-minor-units");
+  expect((select as HTMLSelectElement).value).toBe("player-report-minor-units");
+  expect(screen.getByText(/仅使用已批准的精确列结构/)).toBeTruthy();
+  expect(
+    (screen.getByRole("button", { name: "上传并预检" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
+  expect(screen.queryByRole("button", { name: "确认 Activate" })).toBeNull();
+});

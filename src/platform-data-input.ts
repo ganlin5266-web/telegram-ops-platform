@@ -59,6 +59,13 @@ export const importInput = z
       .max(160)
       .regex(/^[^/\\\x00-\x1f]+$/),
     fileBase64: z.string().min(1).max(2800000),
+    adapter: z
+      .object({
+        id: z.string().min(1).max(80),
+        version: z.string().min(1).max(30),
+      })
+      .strict()
+      .optional(),
     mapping: z.partialRecord(z.enum(fields), z.string().min(1).max(100)),
     coverage: z
       .object({
@@ -253,10 +260,12 @@ export async function parseFile(v: ImportInput) {
   )
     throw new DomainError("file_headers_or_rows_invalid", 400);
   if (
-    !v.mapping.uid ||
-    !headers.includes(v.mapping.uid) ||
-    Object.values(v.mapping).some((h) => !headers.includes(h)) ||
-    new Set(Object.values(v.mapping)).size !== Object.values(v.mapping).length
+    !v.adapter &&
+    (!v.mapping.uid ||
+      !headers.includes(v.mapping.uid) ||
+      Object.values(v.mapping).some((h) => !headers.includes(h)) ||
+      new Set(Object.values(v.mapping)).size !==
+        Object.values(v.mapping).length)
   )
     throw new DomainError("explicit_mapping_invalid", 400);
   if (
@@ -266,6 +275,7 @@ export async function parseFile(v: ImportInput) {
   )
     throw new DomainError("file_row_structure_invalid", 400);
   return {
+    headers,
     fileDigest: digest(b),
     rows: rows.map((r) =>
       Object.fromEntries(headers.map((h, j) => [h, r[j]!])),

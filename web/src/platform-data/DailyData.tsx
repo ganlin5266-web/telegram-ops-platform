@@ -25,7 +25,11 @@ const mappingDefault = JSON.stringify(
   2,
 );
 const display = (v: unknown) =>
-  v === null || v === undefined ? "未提供" : String(v);
+  v === null || v === undefined
+    ? "未提供"
+    : typeof v === "object"
+      ? JSON.stringify(v)
+      : String(v);
 export default function DailyData({
   base,
   permissions,
@@ -44,6 +48,7 @@ export default function DailyData({
     [coverage, setCoverage] = useState("full"),
     [filter, setFilter] = useState(""),
     [mapping, setMapping] = useState(mappingDefault),
+    [adapter, setAdapter] = useState(""),
     [reason, setReason] = useState(""),
     [replacement, setReplacement] = useState(false),
     [file, setFile] = useState<File>(),
@@ -135,7 +140,8 @@ export default function DailyData({
             : "csv",
           filename: file.name,
           fileBase64: btoa(binary),
-          mapping: JSON.parse(mapping),
+          mapping: adapter ? {} : JSON.parse(mapping),
+          ...(adapter ? { adapter: { id: adapter, version: "1" } } : {}),
           coverage: {
             kind: coverage,
             filter: coverage === "full" ? "" : filter,
@@ -208,6 +214,26 @@ export default function DailyData({
           }}
         >
           <h3>上传与预检</h3>
+          <label>
+            报表适配版本
+            <select
+              value={adapter}
+              onChange={(e) => setAdapter(e.target.value)}
+            >
+              <option value="">
+                明确列映射 v1（现有 FUN66 流程，金额原单位）
+              </option>
+              <option value="player-report-minor-units">
+                第二平台玩家报表 v1（money ÷100；首充1900哨兵）
+              </option>
+              <option value="synthetic-mx">MX 合成示例 v1（仅测试）</option>
+            </select>
+          </label>
+          {adapter && (
+            <p>
+              仅使用已批准的精确列结构；未知列拒绝。平台时区和币种来自所选平台。请在预检中核对转换与未确认语义。
+            </p>
+          )}
           <label>
             Excel / CSV
             <input
@@ -359,6 +385,10 @@ export default function DailyData({
             {detail.batch.currency} · {detail.batch.status}
           </p>
           <p>文件 SHA256：{detail.batch.file_digest}</p>
+          <details>
+            <summary>Schema / Mapping Version / 转换规则</summary>
+            <pre>{JSON.stringify(detail.batch.mapping, null, 2)}</pre>
+          </details>
           <p>
             可接受 {detail.batch.accepted_rows} / 拒绝{" "}
             {detail.batch.rejected_rows} / 警告 {detail.batch.warning_rows}
@@ -510,6 +540,10 @@ export default function DailyData({
               <p>
                 batch {r.batch_id} · evidence {r.evidence_id} · {r.reason}
               </p>
+              <details>
+                <summary>Mapping 版本追溯</summary>
+                <pre>{JSON.stringify(r.mapping_snapshot, null, 2)}</pre>
+              </details>
               <dl>
                 {Object.entries(r.values).map(([k, v]) => (
                   <div key={k}>

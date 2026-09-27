@@ -1,4 +1,9 @@
 import {
+  adapterDefinition,
+  mappingSnapshot,
+  normalizeAdapterRow,
+} from "./platform-adapters.js";
+import {
   type Database,
   type Queryable,
   type Scope,
@@ -14,6 +19,7 @@ import {
   digest,
   stable,
   moneyFields,
+  fields,
   type Issue,
 } from "./platform-data-input.js";
 export async function dataAuthorize(
@@ -70,6 +76,22 @@ export async function preflightImport(
       v.currency !== platform.currency
     )
       throw new DomainError("platform_metadata_mismatch", 400);
+    const adapter = v.adapter
+      ? adapterDefinition(v.adapter.id, v.adapter.version)
+      : null;
+    const snapshot = adapter
+      ? mappingSnapshot(
+          adapter,
+          file.headers,
+          v.platformId,
+          v.sourceType,
+          v.timezone,
+          v.currency,
+        )
+      : null;
+    if (adapter && Object.keys(v.mapping).length)
+      throw new DomainError("adapter_mapping_override_rejected", 400);
+    const mappingDigest = snapshot ? snapshot.definitionDigest : "0".repeat(64);
     const meta = { ...v, fileBase64: undefined, filename: undefined };
     const metadataDigest = digest(stable(meta)),
       scopeDigest = digest(
@@ -81,8 +103,14 @@ export async function preflightImport(
       );
     const duplicate = (
       await tx.query(
-        "SELECT id,metadata_digest,status FROM platform_import_batches WHERE brand_id=$1 AND platform_id=$2 AND business_date=$3 AND file_digest=$4",
-        [s.brandId, v.platformId, v.businessDate, file.fileDigest],
+        "SELECT id,metadata_digest,status FROM platform_import_batches WHERE brand_id=$1 AND platform_id=$2 AND business_date=$3 AND file_digest=$4 AND mapping_digest=$5",
+        [
+          s.brandId,
+          v.platformId,
+          v.businessDate,
+          file.fileDigest,
+          mappingDigest,
+        ],
       )
     ).rows[0];
     if (duplicate) {
@@ -100,7 +128,9 @@ export async function preflightImport(
     for (let index = 0; index < file.rows.length; index++) {
       const raw = file.rows[index]!,
         row = index + 2;
-      const n = normalizeRow(raw, v.mapping, platform, row);
+      const n = adapter
+        ? normalizeAdapterRow(raw, adapter, platform, row)
+        : normalizeRow(raw, v.mapping, platform, row);
       if (n.normalized.uid) {
         if (seen.has(n.normalized.uid))
           n.issues.push({ severity: "fatal", code: "duplicate_uid", row });
@@ -163,7 +193,7 @@ export async function preflightImport(
         : "ready";
     const batch = await one(
       tx,
-      `INSERT INTO platform_import_batches(brand_id,platform_id,business_date,timezone,currency,source_type,original_filename,file_digest,metadata_digest,scope_digest,coverage,mapping,completeness,replacement,reason,row_count,accepted_rows,rejected_rows,warning_rows,status,issues,created_by) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING id,status`,
+      `INSERT INTO platform_import_batches(brand_id,platform_id,business_date,timezone,currency,source_type,original_filename,file_digest,metadata_digest,scope_digest,coverage,mapping,completeness,replacement,reason,row_count,accepted_rows,rejected_rows,warning_rows,status,issues,created_by,mapping_digest) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING id,status`,
       [
         s.brandId,
         v.platformId,
@@ -176,7 +206,28 @@ export async function preflightImport(
         metadataDigest,
         scopeDigest,
         JSON.stringify(v.coverage),
-        JSON.stringify(v.mapping),
+        JSON.stringify(
+          snapshot ?? {
+            adapterId: "explicit-canonical",
+            mappingVersion: "1",
+            schemaIdentifier: "explicit-canonical-v1",
+            platformId: v.platformId,
+            sourceType: v.sourceType,
+            timezone: v.timezone,
+            currency: v.currency,
+            status: "active",
+            fieldAvailability: Object.fromEntries(
+              fields.map((f) => [f, Boolean(v.mapping[f])]),
+            ),
+            definition: {
+              mapping: v.mapping,
+              defaultMoneyDivisor: "1",
+              datetimeFormat: "iso-offset",
+              dateFormat: "YYYY-MM-DD",
+            },
+            schemaFingerprint: digest(stable([...file.headers].sort())),
+          },
+        ),
         v.completeness,
         v.replacement,
         v.reason,
@@ -187,6 +238,7 @@ export async function preflightImport(
         status,
         JSON.stringify(issues),
         p.adminId,
+        mappingDigest,
       ],
     );
     for (const row of rows)

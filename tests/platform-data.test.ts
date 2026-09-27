@@ -777,3 +777,141 @@ test("P4 filtered complete batch cannot claim whole-day freshness", async () => 
     await app.close();
   }
 });
+
+test("P4 adapter synthetic source normalizes without creating TG and preserves mapping/raw evidence", async () => {
+  const f = await fixture();
+  const headers = [
+    "玩家首充金額",
+    "玩家id ",
+    "当日充值",
+    "玩家首充日期",
+    "当日充值次数",
+    "最近存款時間",
+  ];
+  const v = f.input(undefined, {
+    mapping: {},
+    adapter: { id: "player-report-minor-units", version: "1" },
+    fileBase64: Buffer.from(
+      [
+        headers.join(","),
+        "0,TEST_USER_001,1500,1900-01-01 00:00:00,1500,1900-01-01 00:00:00",
+      ].join("\n"),
+    ).toString("base64"),
+  });
+  const before = await db.query(
+    "SELECT id FROM telegram_users WHERE bot_id=$1",
+    [f.s.botId],
+  );
+  const b = await f.pre(v);
+  assert.equal(b.status, "ready");
+  const batch = await one(
+    db,
+    "SELECT * FROM platform_import_batches WHERE id=$1",
+    [b.id],
+  );
+  assert.equal(batch.mapping.mappingVersion, "1");
+  assert.equal(batch.mapping.platformId, f.platform.id);
+  assert.equal(batch.mapping.definition.defaultMoneyDivisor, "100");
+  assert.equal(batch.mapping_digest, batch.mapping.definitionDigest);
+  const e = await one(
+    db,
+    "SELECT * FROM platform_import_evidence WHERE batch_id=$1",
+    [b.id],
+  );
+  assert.equal(e.raw_values["当日充值"], "1500");
+  assert.equal(e.normalized.deposit, "15.000000");
+  assert.equal(e.normalized.deposit_count, "1500");
+  assert.equal(e.normalized.derived.has_first_deposit, false);
+  await f.activate(b.id);
+  assert.equal((await f.pre(v)).duplicate, true);
+  const r = await one(
+    db,
+    "SELECT * FROM platform_user_daily_fact_revisions WHERE batch_id=$1",
+    [b.id],
+  );
+  assert.equal(r.identity_id, null);
+  assert.equal(r.normalized._adapter.version, "1");
+  assert.equal(r.normalized.first_deposit_date, null);
+  assert.equal(
+    (
+      await db.query("SELECT id FROM telegram_users WHERE bot_id=$1", [
+        f.s.botId,
+      ])
+    ).rows.length,
+    before.rows.length,
+  );
+  assert.equal(
+    (
+      await db.query("SELECT id FROM point_accounts WHERE bot_id=$1", [
+        f.s.botId,
+      ])
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    () => f.pre({ ...v, mapping: { uid: "玩家id " } }),
+    error("adapter_mapping_override_rejected"),
+  );
+});
+
+test("P4 legacy duplicate remains stable after mapping snapshot addition", async () => {
+  const f = await fixture();
+  const v = f.input();
+  const b = await f.pre(v);
+  await f.activate(b.id);
+  const batch = await one(
+    db,
+    "SELECT mapping,mapping_digest FROM platform_import_batches WHERE id=$1",
+    [b.id],
+  );
+  assert.equal(batch.mapping.adapterId, "explicit-canonical");
+  assert.equal(batch.mapping_digest, "0".repeat(64));
+  assert.equal((await f.pre(v)).id, b.id);
+});
+
+test("P4 third schema Excel uses same activation pipeline with absent metrics NULL", async () => {
+  const f = await fixture();
+  const w = new ExcelJS.Workbook();
+  const sheet = w.addWorksheet("Synthetic");
+  sheet.addRow(["Joined", "Deposit MXN", "Player"]);
+  sheet.addRow(["26/09/2026 12:00:00", "1500", "TEST_USER_002"]);
+  const v = f.input(undefined, {
+    mapping: {},
+    adapter: { id: "synthetic-mx", version: "1" },
+    sourceType: "xlsx",
+    filename: "SYNTHETIC.xlsx",
+    fileBase64: Buffer.from(await w.xlsx.writeBuffer()).toString("base64"),
+  });
+  const b = await f.pre(v);
+  await f.activate(b.id);
+  const r = await one(
+    db,
+    "SELECT * FROM platform_user_daily_fact_revisions WHERE batch_id=$1",
+    [b.id],
+  );
+  assert.equal(r.deposit, "1500.000000");
+  assert.equal(r.withdrawal, null);
+  assert.equal(r.payout, null);
+  assert.equal(r.normalized.registered_at, "2026-09-26T15:00:00.000Z");
+});
+
+test("P4 mapping identity allows same source bytes for a new immutable version, legacy key remains unique", async () => {
+  const f = await fixture();
+  const b = await f.pre();
+  const copySql = `INSERT INTO platform_import_batches(brand_id,platform_id,business_date,timezone,currency,source_type,original_filename,file_digest,metadata_digest,scope_digest,coverage,mapping,completeness,replacement,reason,row_count,accepted_rows,rejected_rows,warning_rows,status,issues,created_by,mapping_digest)
+ SELECT brand_id,platform_id,business_date,timezone,currency,source_type,original_filename,file_digest,metadata_digest,scope_digest,coverage,mapping,completeness,replacement,reason,row_count,accepted_rows,rejected_rows,warning_rows,status,issues,created_by,$2 FROM platform_import_batches WHERE id=$1 RETURNING id`;
+  await assert.rejects(() => db.query(copySql, [b.id, "0".repeat(64)]));
+  const v2 = await db.query(copySql, [b.id, "a".repeat(64)]);
+  assert.equal(v2.rows.length, 1);
+  await assert.rejects(() =>
+    db.query(
+      "UPDATE platform_import_batches SET mapping_digest=$2 WHERE id=$1",
+      [v2.rows[0]!.id, "b".repeat(64)],
+    ),
+  );
+  await assert.rejects(() =>
+    db.query("UPDATE platform_import_batches SET mapping='{}' WHERE id=$1", [
+      v2.rows[0]!.id,
+    ]),
+  );
+});
