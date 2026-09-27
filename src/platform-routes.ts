@@ -184,7 +184,8 @@ export function attachAdminPlatforms(
     const s = scope.parse(req.params),
       p = await auth(req);
     await authorize(db, p, s, "platform_identities.read");
-    return identityList(db, s.brandId, s.botId, null, req.query);
+    const { userId, ...query } = paging.extend({ userId: z.uuid().optional() }).parse(req.query);
+    return identityList(db, s.brandId, s.botId, userId ?? null, query);
   });
   app.get(base + "/platform-identities/:identityId", async (req) => {
     none.parse(req.query);

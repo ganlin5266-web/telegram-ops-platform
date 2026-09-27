@@ -1,3 +1,11 @@
+import Dashboard from "./product/Dashboard";
+import {
+  ProductSpace,
+  UserMembership,
+  AuditDisclosure,
+  UserPlatforms,
+} from "./product/Spaces";
+import { productCopy } from "./product/copy";
 import Entitlements from "./entitlements/Entitlements";
 import PointExpiry from "./point-expiry/PointExpiry";
 import DailyData from "./platform-data/DailyData";
@@ -386,23 +394,37 @@ export default function App() {
         <div className="logo">
           T
           <span>
-            OPS<span className="muted">运营工作台</span>
+            CLUB<span className="muted">会员运营中心</span>
           </span>
         </div>
         <div className="nav-caption">工作空间</div>
         <nav>
           {[
-            ["overview", "◫", "总览"],
-            ["users", "◎", "Telegram 用户"],
-            ["platforms", "▦", "平台管理"],
-            ["daily-data", "▤", "平台数据"],
-            ["point-expiry", "◷", "积分有效期"],
-            ["entitlements", "◇", "会员权益"],
-            ["identities", "✓", "UID绑定审核"],
+            ["overview", "◫", productCopy.nav.overview],
+            ["users", "◎", productCopy.nav.users],
+            ["membership", "◇", productCopy.nav.membership],
+            ["activities", "✦", productCopy.nav.activities],
+            ["points", "◷", productCopy.nav.points],
+            ["games", "▧", productCopy.nav.games],
+            ["data", "▤", productCopy.nav.data],
+            ["settings", "⚙", productCopy.nav.settings],
           ].map(([id, icon, title]) => (
             <button
               key={id}
-              className={page === id ? "active" : ""}
+              className={
+                page === id ||
+                (
+                  {
+                    entitlements: "membership",
+                    "point-expiry": "points",
+                    "daily-data": "data",
+                    platforms: "settings",
+                    identities: "users",
+                  } as Record<string, string>
+                )[page] === id
+                  ? "active"
+                  : ""
+              }
               onClick={() => {
                 setPage(id);
                 setDrawer(false);
@@ -502,11 +524,12 @@ export default function App() {
               <h1>
                 {
                   {
+                    ...productCopy.nav,
                     overview: "工作台总览",
                     users: "Telegram 用户",
                     platforms: "平台管理",
                     "point-expiry": "积分有效期",
-                    "entitlements": "会员权益",
+                    entitlements: "会员权益",
                     "daily-data": "平台数据 · 用户日报",
                     identities: "UID绑定审核",
                   }[page]
@@ -514,8 +537,8 @@ export default function App() {
               </h1>
               <p className="muted">
                 {page === "overview"
-                  ? "查看当前身份、运营范围与连接状态。"
-                  : "查看当前 Bot 用户，读取余额或进行授权积分调整。"}
+                  ? "看清今天的业务变化，把注意力留给用户。"
+                  : productCopy.subtitle}
               </p>
             </div>
             <span className="badge">中文管理后台</span>
@@ -533,62 +556,153 @@ export default function App() {
           ) : !bots.length && !loading && !scopeError ? (
             <section className="empty">当前品牌暂无可访问Bot。</section>
           ) : null}
-          {page === "overview" ? (
+          <div className="product-subnav" aria-label="模块功能">
+            {(
+              (
+                {
+                  overview: [],
+                  users: [
+                    ["users", "Telegram 用户"],
+                    ["identities", "UID绑定审核"],
+                  ],
+                  identities: [
+                    ["users", "Telegram 用户"],
+                    ["identities", "UID绑定审核"],
+                  ],
+                  membership: [
+                    ["membership", "会员中心"],
+                    ["entitlements", "会员权益"],
+                  ],
+                  entitlements: [
+                    ["membership", "会员中心"],
+                    ["entitlements", "会员权益"],
+                  ],
+                  points: [
+                    ["points", "Points总览"],
+                    ["point-expiry", "积分有效期"],
+                    ["users", "用户积分与记录"],
+                  ],
+                  "point-expiry": [
+                    ["points", "Points总览"],
+                    ["point-expiry", "积分有效期"],
+                  ],
+                  data: [
+                    ["data", "日 / 周 / 月报表"],
+                    ["daily-data", "平台数据"],
+                  ],
+                  "daily-data": [
+                    ["data", "日 / 周 / 月报表"],
+                    ["daily-data", "平台数据"],
+                  ],
+                  settings: [
+                    ["settings", "常规设置"],
+                    ["platforms", "平台管理"],
+                  ],
+                  platforms: [
+                    ["settings", "常规设置"],
+                    ["platforms", "平台管理"],
+                  ],
+                } as Record<string, string[][]>
+              )[page] || []
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                aria-pressed={page === id}
+                onClick={() => {
+                  setPage(id);
+                  clearDetails();
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {page === "overview" || page === "data" || page === "points" ? (
+            bot && !loading && !scopeError ? (
+              <Dashboard
+                key={base + page}
+                base={base}
+                permissions={permissions}
+                onExpire={expire}
+                dataCenter={page !== "overview"}
+              />
+            ) : null
+          ) : page === "membership" ||
+            page === "activities" ||
+            page === "games" ? (
+            <ProductSpace kind={page} />
+          ) : page === "settings" ? (
             <>
-              <div className="cards">
-                <section>
-                  <div className="eyebrow">当前管理员</div>
-                  <h2>{me.displayName}</h2>
-                  <p>后台界面：简体中文</p>
-                  <span className="badge green">Session 已认证</span>
-                </section>
-                <section>
-                  <div className="eyebrow">品牌范围</div>
-                  <h2>{currentBrand?.name || "暂无数据"}</h2>
-                  <p>状态：{currentBrand?.status || "暂无数据"}</p>
-                  <small>
-                    默认语言：{currentBrand?.defaultLanguage || "暂无数据"}
-                  </small>
-                </section>
-                <section>
-                  <div className="eyebrow">当前 TELEGRAM BOT</div>
-                  <h2>{currentBot?.name || "暂无数据"}</h2>
-                  <p>
-                    {currentBot?.username
-                      ? `@${currentBot.username}`
-                      : "暂无 Username"}
-                  </p>
-                  <small>
-                    状态：{currentBot?.status || "暂无数据"} · 默认语言：
-                    {currentBot?.defaultLanguage || "暂无数据"}
-                  </small>
-                </section>
-              </div>
               <section className="panel">
-                <h3>系统与访问状态</h3>
-                <div className="info-row">
-                  <span>管理 API</span>
-                  <span>已完成身份与授权品牌读取</span>
-                </div>
-                <div className="info-row">
-                  <span>当前范围权限</span>
-                  <span>
-                    {loading ? "加载中" : permissions.join("、") || "暂无权限"}
-                  </span>
-                </div>
-                <div className="info-row">
-                  <span>运营指标 / Webhook 实时状态</span>
-                  <span className="muted">尚未开放</span>
-                </div>
-                <div className="language-note">
-                  后台中文仅用于管理界面。Telegram
-                  发送语言由服务端按用户偏好、Telegram 语言、Bot
-                  与品牌默认语言解析。
+                <h2>工作空间</h2>
+                <div className="cards">
+                  <div>
+                    <small>品牌</small>
+                    <h3>{currentBrand?.name}</h3>
+                    <span className="badge">{currentBrand?.status}</span>
+                  </div>
+                  <div>
+                    <small>Telegram Bot</small>
+                    <h3>{currentBot?.name}</h3>
+                    <span className="badge">{currentBot?.status}</span>
+                  </div>
+                  <div>
+                    <small>管理员</small>
+                    <h3>{me.displayName}</h3>
+                    <span className="badge">Session 已认证</span>
+                  </div>
                 </div>
               </section>
+              <section className="panel">
+                <h3>基础设置</h3>
+                <p>
+                  品牌默认语言：{currentBrand?.defaultLanguage} · Bot 默认语言：
+                  {currentBot?.defaultLanguage}
+                </p>
+                <p>
+                  Telegram 发送语言由服务端按用户偏好、Telegram 语言、Bot
+                  与品牌默认语言解析。
+                </p>
+                <p>
+                  语言与主题沿用当前工作空间配置；Mini App 内可选择个人语言。
+                </p>
+                <button onClick={() => setPage("platforms")}>平台管理</button>
+                <p className="muted">
+                  正式会员基础规则、帮助内容编辑：尚未开放。
+                </p>
+              </section>
+              <details className="panel">
+                <summary>{productCopy.advanced}</summary>
+                <p className="muted">
+                  所有操作继续由服务端校验权限；下列入口保留现有证据链。
+                </p>
+                <div className="product-subnav">
+                  <button onClick={() => setPage("daily-data")}>
+                    Adapter / Mapping / 数据诊断
+                  </button>
+                  <button onClick={() => setPage("entitlements")}>
+                    资格与 Revision
+                  </button>
+                  <button onClick={() => setPage("point-expiry")}>
+                    积分规则与高级详情
+                  </button>
+                </div>
+                <p>当前范围权限：{permissions.join("、") || "暂无权限"}</p>
+                {permissions.includes("audit.read") && (
+                  <AuditPanel key={base} base={base} onExpire={expire} />
+                )}
+              </details>
             </>
           ) : page === "entitlements" ? (
-            bot && !loading && !scopeError ? <Entitlements key={base} base={base} permissions={permissions} csrf={me.csrfToken} onExpire={expire}/> : null
+            bot && !loading && !scopeError ? (
+              <Entitlements
+                key={base}
+                base={base}
+                permissions={permissions}
+                csrf={me.csrfToken}
+                onExpire={expire}
+              />
+            ) : null
           ) : page === "point-expiry" ? (
             bot && !loading && !scopeError ? (
               <PointExpiry
@@ -637,7 +751,7 @@ export default function App() {
           ) : null}
         </main>
         <footer>
-          Telegram Operations Platform <span>第二批 · 用户运营中心</span>
+          Member Operations <span>用户 · 成长 · 积分 · 权益</span>
         </footer>
       </div>
       {selected && (
@@ -649,7 +763,7 @@ export default function App() {
             aria-label="用户详情"
           >
             <div className="table-title">
-              <h2>用户详情</h2>
+              <h2>用户360</h2>
               <button
                 aria-label="关闭详情"
                 disabled={sending}
@@ -678,8 +792,17 @@ export default function App() {
               <span>当前积分余额</span>
               <strong>{pointBusy ? "读取中…" : (balance ?? "暂无数据")}</strong>
             </div>
+            <UserMembership />
+            {permissions.includes("platform_identities.read") && (
+              <UserPlatforms
+                key={`platforms:${base}/${selected.id}`}
+                base={base}
+                userId={selected.id}
+                onExpire={expire}
+              />
+            )}
             <PointSummary
-              key={`${base}/${selected.id}`}
+              key={`summary:${base}/${selected.id}`}
               base={base}
               userId={selected.id}
               revision={pointsRevision}
@@ -690,9 +813,6 @@ export default function App() {
                 ["overview", "概览"],
                 ["points", "积分"],
                 ["referrals", "邀请"],
-                ...(permissions.includes("audit.read")
-                  ? [["audit", "操作记录"]]
-                  : []),
               ].map(([id, label]) => (
                 <button
                   key={id}
@@ -729,8 +849,8 @@ export default function App() {
                 onExpire={expire}
               />
             )}
-            {detailTab === "audit" && permissions.includes("audit.read") && (
-              <AuditPanel key={base} base={base} onExpire={expire} />
+            {permissions.includes("audit.read") && (
+              <AuditDisclosure key={base} base={base} onExpire={expire} />
             )}
             {alert(pointError)}
             {pointError && !pending && (

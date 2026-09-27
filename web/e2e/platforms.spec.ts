@@ -109,8 +109,16 @@ test("P3 ordinary admin remains denied review and platform management by default
     .fill(process.env.UI_TEST_PASSWORD!);
   await page.getByRole("button", { name: "登录工作台 →" }).click();
   await expect(page.getByRole("heading", { name: "工作台总览" })).toBeVisible();
-  await page.getByRole("button", { name: "UID绑定审核" }).click();
+  await page.getByRole("button", { name: "◎ 用户", exact: true }).click();
+  await page
+    .getByRole("button", { name: "UID绑定审核", exact: true })
+    .first()
+    .click();
   await expect(page.getByText("你没有权限查看此页面。")).toBeVisible();
-  await page.getByRole("button", { name: "平台管理" }).click();
+  await page.getByRole("button", { name: "⚙ 设置", exact: true }).click();
+  await page
+    .getByRole("button", { name: "平台管理", exact: true })
+    .first()
+    .click();
   await expect(page.getByText("你没有权限查看此页面。")).toBeVisible();
 });

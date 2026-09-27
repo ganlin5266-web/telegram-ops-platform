@@ -12,14 +12,13 @@ import {
   readPreference,
   savePreference,
   contentLocale,
-  homeState,
   type Locale,
   type Key,
 } from "./i18n";
 import PlatformAccounts from "./PlatformAccounts";
 import "./style.css";
-const tabs = ["home", "activities", "rewards", "invite", "me"] as const;
-type Tab = (typeof tabs)[number];
+const tabs = ["home", "membership", "activities", "games", "me"] as const;
+type Tab = (typeof tabs)[number] | "rewards" | "invite";
 type Kind = "point-ledger" | "referrals" | "redemptions";
 const templates = [
   ["newcomer", "✧", "newcomerBody"],
@@ -266,6 +265,11 @@ export function MiniApp() {
         </main>
       ) : (
         <main>
+          {(tab === "rewards" || tab === "invite") && (
+            <button className="text-button" onClick={() => select("me")}>
+              ← {t("back")}
+            </button>
+          )}
           <div className="title">
             <h1>
               {tab === "home"
@@ -277,25 +281,20 @@ export function MiniApp() {
           </div>
           {tab === "home" && (
             <>
-              <section className="hero focus-card" data-testid="today-focus">
-                <span className="pill">{t("focus")}</span>
-                <span className="hero-art" aria-hidden="true">
-                  ✧
-                </span>
-                <h2>
-                  {t(
-                    homeState(home) === "empty_state" ? "ready" : "returnTitle",
-                  )}
-                </h2>
-                <p>
-                  {t(
-                    homeState(home) === "empty_state"
-                      ? "readyBody"
-                      : "returnBody",
-                  )}
-                </p>
-                <button onClick={() => select("activities")}>
-                  {t("focusCta")} <span aria-hidden="true">→</span>
+              <section className="member-pass" data-testid="today-focus">
+                <div className="pass-top">
+                  <span>{t("level")}</span>
+                  <span aria-hidden="true">✧</span>
+                </div>
+                <h2>{t("levelPending")}</h2>
+                <div className="pass-growth">
+                  <span>{t("growth")}</span>
+                  <strong>—</strong>
+                </div>
+                <div className="growth-track" aria-label={t("notConnected")} />
+                <p>{t("growthPending")}</p>
+                <button onClick={() => select("membership")}>
+                  {t("membership")} <span aria-hidden="true">→</span>
                 </button>
               </section>
               <h2 className="section-title">{t("summary")}</h2>
@@ -313,6 +312,17 @@ export function MiniApp() {
                   <span>{t("myRedeem")}</span>
                 </button>
               </div>
+              <h2 className="section-title">{t("todayBenefits")}</h2>
+              <div className="benefit-strip">
+                {(
+                  ["gameChances", "dailyReward", "memberActivity"] as const
+                ).map((k) => (
+                  <div key={k}>
+                    <span>{t(k)}</span>
+                    <small>{t("soon")}</small>
+                  </div>
+                ))}
+              </div>
               <h2 className="section-title">{t("quick")}</h2>
               <div className="quick-grid">
                 {(
@@ -323,12 +333,7 @@ export function MiniApp() {
                     ["friends", "invite", "↗"],
                   ] as const
                 ).map(([label, target, icon]) => (
-                  <button
-                    key={label}
-                    onClick={() =>
-                      target === "games" ? setPanel("games") : select(target)
-                    }
-                  >
+                  <button key={label} onClick={() => select(target)}>
                     <span className="tile-icon" aria-hidden="true">
                       {icon}
                     </span>
@@ -349,13 +354,81 @@ export function MiniApp() {
               </div>
             </>
           )}
+          {tab === "membership" && (
+            <>
+              <section className="member-pass">
+                <div className="pass-top">
+                  <span>{t("level")}</span>
+                  <span aria-hidden="true">✧</span>
+                </div>
+                <h2>{t("levelPending")}</h2>
+                <div className="pass-growth">
+                  <span>{t("growth")}</span>
+                  <strong>—</strong>
+                </div>
+                <div className="growth-track" aria-label={t("notConnected")} />
+                <p>{t("growthPending")}</p>
+              </section>
+              <section className="card">
+                <h2>{t("nextLevel")}</h2>
+                <p>{t("notConnected")}</p>
+                <p className="muted">{t("growthDifference")}</p>
+              </section>
+              <section className="card">
+                <h2>{t("benefits")}</h2>
+                {(
+                  ["gameChances", "dailyReward", "memberActivity"] as const
+                ).map((k) => (
+                  <div className="placeholder-row" key={k}>
+                    <span>{t(k)}</span>
+                    <small>{t("soon")}</small>
+                  </div>
+                ))}
+              </section>
+              <section className="card">
+                <h2>{t("unlockBenefits")}</h2>
+                <p className="muted">{t("memberPending")}</p>
+                <details>
+                  <summary>{t("memberExplanation")}</summary>
+                  <p>{t("growthDifference")}</p>
+                </details>
+              </section>
+            </>
+          )}
+          {tab === "games" && (
+            <>
+              <p className="page-intro">{t("gameBody")}</p>
+              <div className="game-grid">
+                {(["wheel", "chest", "scratch", "cards"] as const).map(
+                  (k, i) => (
+                    <section className="card game-tile" key={k}>
+                      <span className="game-glyph" aria-hidden="true">
+                        {["◉", "◇", "▧", "♧"][i]}
+                      </span>
+                      <h2>{t(k)}</h2>
+                      <span className="badge">{t("soon")}</span>
+                      <button disabled>{t("upcoming")}</button>
+                    </section>
+                  ),
+                )}
+              </div>
+            </>
+          )}
           {tab === "activities" && (
             <>
               <p className="page-intro">{t("activityIntro")}</p>
+              <button
+                className="activity-invite"
+                onClick={() => select("invite")}
+              >
+                {t("friends")} <span>→</span>
+              </button>
               {catalogue}
               <section className="card">
                 <h2>{t("future")}</h2>
-                {(["platformTask", "milestone"] as const).map((k) => (
+                {(
+                  ["platformTask", "limitedActivity", "memberActivity"] as const
+                ).map((k) => (
                   <div className="placeholder-row" key={k}>
                     <span>{t(k)}</span>
                     <small>{t("soon")}</small>
@@ -405,6 +478,13 @@ export function MiniApp() {
                   {t("myRedeem")}
                 </button>
               </div>
+              <details className="card">
+                <summary>{t("earnPoints")}</summary>
+                <p>{t("earnPointsBody")}</p>
+                <button onClick={() => select("activities")}>
+                  {t("activities")}
+                </button>
+              </details>
               {history}
             </>
           )}
@@ -606,11 +686,16 @@ export function MiniApp() {
           {tabs.map((item, i) => (
             <button
               key={item}
-              aria-current={item === tab ? "page" : undefined}
+              aria-current={
+                item === tab ||
+                (item === "me" && (tab === "rewards" || tab === "invite"))
+                  ? "page"
+                  : undefined
+              }
               disabled={busy}
               onClick={() => select(item)}
             >
-              <span aria-hidden="true">{["⌂", "✦", "◇", "↗", "○"][i]}</span>
+              <span aria-hidden="true">{["⌂", "✧", "✦", "▧", "○"][i]}</span>
               {t(item)}
             </button>
           ))}

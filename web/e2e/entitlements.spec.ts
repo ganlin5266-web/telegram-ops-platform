@@ -11,7 +11,11 @@ test("qualification admin navigation is isolated and remains disabled before app
     .fill(process.env.UI_TEST_PASSWORD!);
   await page.getByRole("button", { name: "登录工作台 →", exact: true }).click();
   await expect(page.getByRole("heading", { name: "工作台总览" })).toBeVisible();
-  await page.getByRole("button", { name: "会员权益" }).click();
+  await page.getByRole("button", { name: "◇ 会员", exact: true }).click();
+  await page
+    .getByRole("button", { name: "会员权益", exact: true })
+    .first()
+    .click();
   await expect(page.getByText("资格计算关闭；草稿与预览可用")).toBeVisible();
   await expect(page.getByText(/不发积分或游戏次数/)).toBeVisible();
   await page.getByRole("button", { name: "新建规则版本" }).click();

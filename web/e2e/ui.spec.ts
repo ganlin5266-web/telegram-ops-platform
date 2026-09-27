@@ -52,6 +52,7 @@ test("real Session Cookie, me, scopes and no browser-stored credentials", async 
   ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "工作台总览" })).toBeVisible();
+  await page.getByRole("button", { name: "⚙ 设置" }).click();
   await expect(page.getByText(/默认语言：pt-BR/).first()).toBeVisible();
   await page.screenshot({
     path: test.info().outputPath("desktop.png"),
@@ -63,7 +64,7 @@ test("real users cursor pagination, exact balance adjustment, CSRF and ledger tr
   page,
 }) => {
   await login(page);
-  await page.getByRole("button", { name: "Telegram 用户" }).click();
+  await page.getByRole("button", { name: "◎ 用户" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(50);
   await page.getByRole("button", { name: "下一批" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(1);
@@ -85,7 +86,7 @@ test("real brand and bot switching clear detail and return scoped users", async 
   page,
 }) => {
   await login(page);
-  await page.getByRole("button", { name: "Telegram 用户" }).click();
+  await page.getByRole("button", { name: "◎ 用户" }).click();
   await page.getByRole("button", { name: "查看积分" }).first().click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByLabel("关闭详情").click();
@@ -106,7 +107,7 @@ test("server unauthorized response clears session UI and logout revokes cookie",
 }) => {
   await login(page);
   await context.clearCookies();
-  await page.getByRole("button", { name: "Telegram 用户" }).click();
+  await page.getByRole("button", { name: "◎ 用户" }).click();
   await expect(page.getByText("登录已过期，请重新登录")).toBeVisible();
   await expect(page.getByLabel("品牌", { exact: true })).toHaveCount(0);
   await login(page);
@@ -123,7 +124,7 @@ test("mobile layout uses working drawer with no page-level overflow", async ({
   await login(page);
   await expect(page.getByLabel("打开导航")).toBeVisible();
   await page.getByLabel("打开导航").click();
-  await page.getByRole("button", { name: "Telegram 用户" }).click();
+  await page.getByRole("button", { name: "◎ 用户" }).click();
   await expect(page.locator("tbody tr")).toHaveCount(50);
   expect(
     await page.evaluate(
@@ -148,8 +149,9 @@ test("operations center real search filters count sort and user overview", async
   page,
 }) => {
   await login(page);
-  await page.getByRole("button", { name: "Telegram 用户" }).click();
+  await page.getByRole("button", { name: "◎ 用户" }).click();
   await expect(page.getByText("共 51 位用户")).toBeVisible();
+  await page.locator(".filter-desktop summary").click();
   await page.getByLabel("用户状态", { exact: true }).selectOption("blocked");
   await expect(page.getByText("共 0 位用户")).toBeVisible();
   await expect(page.getByText("当前批次暂无用户")).toBeVisible();
@@ -177,7 +179,7 @@ test("operations center real adjustment refreshes totals ledger referral and sco
   page,
 }) => {
   await login(page);
-  await page.getByRole("button", { name: "Telegram 用户" }).click();
+  await page.getByRole("button", { name: "◎ 用户" }).click();
   await page.getByLabel("搜索用户", { exact: true }).fill("5000000050");
   await expect(page.getByText("共 1 位用户")).toBeVisible();
   await page.getByRole("button", { name: "查看积分", exact: true }).click();
@@ -196,7 +198,7 @@ test("operations center real adjustment refreshes totals ledger referral and sco
   await expect(
     page.getByText("原因：运营中心联调", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("tab", { name: "操作记录", exact: true }).click();
+  await page.getByText("高级 · 操作记录 / 证据", { exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "当前 Bot 操作日志" }),
   ).toBeVisible();
@@ -219,7 +221,7 @@ test("operations center 390px filter sheet and full-screen detail", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await page.getByLabel("打开导航").click();
-  await page.getByRole("button", { name: "Telegram 用户" }).click();
+  await page.getByRole("button", { name: "◎ 用户" }).click();
   await page.getByRole("button", { name: "筛选与排序", exact: true }).click();
   const filters = page.getByRole("dialog", { name: "筛选与排序" });
   await filters.getByLabel("语言代码", { exact: true }).fill("zh-CN");

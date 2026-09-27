@@ -62,20 +62,19 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     page.getByRole("heading", { name: "你好，测试用户" }),
   ).toBeVisible();
   await expect(page.getByRole("navigation")).toHaveCSS("position", "fixed");
-  await expect(page.getByTestId("today-focus")).toContainText(
-    "你的会员中心已经准备好了",
-  );
+  await expect(page.getByTestId("today-focus")).toContainText("等级即将开放");
   await expect(page.getByTestId("today-focus")).not.toContainText(
     "暂无积分账户",
   );
   await expect(
-    page.getByRole("button", { name: "查看即将开放" }),
+    page.getByTestId("today-focus").getByRole("button", { name: "会员" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "小游戏 即将开放" }).click();
-  await expect(
-    page.getByRole("heading", { name: "游戏中心即将开放" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "小游戏" })).toBeVisible();
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "首页", exact: true })
+    .click();
 
   for (const width of [320, 430, 1000]) {
     await page.setViewportSize({ width, height: 844 });
@@ -88,7 +87,7 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
       await page
         .locator(".mini-shell")
         .evaluate((el) => el.getBoundingClientRect().width),
-    ).toBeLessThanOrEqual(480);
+    ).toBeLessThanOrEqual(620);
   }
   await page.setViewportSize({ width: 390, height: 844 });
   if (process.env.MINI_UI_SCREENSHOT)
@@ -96,11 +95,23 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
       path: process.env.MINI_UI_SCREENSHOT,
       fullPage: true,
     });
-  for (const tab of ["活动", "奖励", "邀请", "我的"]) {
-    await page
-      .getByRole("navigation")
-      .getByRole("button", { name: tab, exact: true })
-      .click();
+  for (const tab of ["会员", "活动", "小游戏", "奖励", "邀请", "我的"]) {
+    if (tab === "奖励" || tab === "邀请") {
+      await page
+        .getByRole("navigation")
+        .getByRole("button", { name: "我的", exact: true })
+        .click();
+      await page
+        .getByRole("button", {
+          name: tab === "奖励" ? "我的积分" : "邀请记录",
+          exact: true,
+        })
+        .click();
+    } else
+      await page
+        .getByRole("navigation")
+        .getByRole("button", { name: tab, exact: true })
+        .click();
     await expect(
       page.getByRole("heading", { name: tab, exact: true }),
     ).toBeVisible();
@@ -126,7 +137,9 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
   await expect(page.locator("body")).not.toContainText(
     /\b[0-9a-f]{8}-[0-9a-f-]{27}\b/,
   );
-  await expect(page.getByRole("button", { name: "平台账号", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "平台账号", exact: true }),
+  ).toBeVisible();
 
   await expect(page.locator("body")).not.toContainText(token);
   expect(
@@ -153,7 +166,7 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
 
   await page.getByRole("button", { name: /语言 ·?|语言 简体中文/ }).click();
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await expect(page.getByRole("navigation")).toContainText("Rewards");
+  await expect(page.getByRole("navigation")).toContainText("Member");
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Hello, 测试用户" }),

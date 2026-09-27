@@ -205,7 +205,10 @@ export default function UsersCenter({
               onChange={(e) => update("q", e.target.value)}
             />
           </label>
-          <div className="filter-desktop">{filter}</div>
+          <details className="filter-desktop">
+            <summary>筛选与排序</summary>
+            {filter}
+          </details>
           <button
             className="mobile-filter-button"
             onClick={() => setMobileFilters(true)}
@@ -259,10 +262,10 @@ export default function UsersCenter({
                   <tr>
                     {[
                       "用户 / Telegram ID",
-                      "Username",
-                      "Telegram 语言",
-                      "偏好语言",
-                      "首次启动",
+                      "会员等级",
+                      "Growth",
+                      "Points",
+                      "平台绑定",
                       "最后互动",
                       "状态",
                       "操作",
@@ -281,11 +284,24 @@ export default function UsersCenter({
                             .join(" ") || "未提供姓名"}
                         </strong>
                         <small>{u.telegram_user_id}</small>
+                        <small>{u.telegram_language_code || "暂无数据"}</small>
                       </td>
-                      <td>{u.username ? `@${u.username}` : "—"}</td>
-                      <td>{u.telegram_language_code || "暂无数据"}</td>
-                      <td>{u.preferred_language || "未设置"}</td>
-                      <td>{date(u.first_started_at)}</td>
+                      <td>
+                        <span className="muted">待接入</span>
+                      </td>
+                      <td>
+                        <span className="muted">待接入</span>
+                      </td>
+                      <td>
+                        <button onClick={() => onSelect(u, "points")}>
+                          查看余额
+                        </button>
+                      </td>
+                      <td>
+                        <button onClick={() => onSelect(u, "overview")}>
+                          查看档案
+                        </button>
+                      </td>
                       <td>{date(u.last_interaction_at)}</td>
                       <td>
                         <span className="badge">{u.status}</span>

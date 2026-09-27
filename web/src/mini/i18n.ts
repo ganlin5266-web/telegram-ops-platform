@@ -14,6 +14,26 @@ export const localeNames: Record<Locale, string> = {
   fil: "Filipino",
 };
 export const zh = {
+  membership: "会员",
+  level: "会员等级",
+  growth: "成长值 Growth",
+  benefits: "会员权益",
+  notConnected: "待接入",
+  levelPending: "等级即将开放",
+  growthPending: "成长规则正在准备，开放后查看升级进度。",
+  nextLevel: "下一等级",
+  growthDifference: "Growth 用于升级，Points 用于奖励与兑换。",
+  todayBenefits: "今日权益",
+  dailyReward: "每日奖励",
+  unlockBenefits: "升级可解锁",
+  memberExplanation: "等级说明",
+  memberPending: "正式等级和权益开放后，将在这里展示升级要求与可享权益。",
+  earnPoints: "如何获得积分",
+  earnPointsBody: "可参与的赚取方式以正式活动为准。先到活动页查看已开放内容。",
+  gameChances: "游戏次数",
+  limitedActivity: "限时活动",
+  memberActivity: "会员专属",
+
   home: "首页",
   activities: "活动",
   rewards: "奖励",
@@ -158,6 +178,30 @@ export const zh = {
 } as const;
 export type Key = keyof typeof zh;
 const en: Record<Key, string> = {
+  membership: "Member",
+  level: "Member level",
+  growth: "Growth",
+  benefits: "Benefits",
+  notConnected: "Not connected",
+  levelPending: "Levels coming soon",
+  growthPending:
+    "Growth rules are being prepared. Your progress will appear when available.",
+  nextLevel: "Next level",
+  growthDifference:
+    "Growth upgrades your level. Points are for rewards and redemption.",
+  todayBenefits: "Today's benefits",
+  dailyReward: "Daily rewards",
+  unlockBenefits: "Unlock with your next level",
+  memberExplanation: "About levels",
+  memberPending:
+    "Upgrade requirements and benefits will appear when official levels are available.",
+  earnPoints: "How to earn points",
+  earnPointsBody:
+    "Earning opportunities follow published activity rules. Explore activities for available options.",
+  gameChances: "Game chances",
+  limitedActivity: "Limited-time activities",
+  memberActivity: "Member exclusives",
+
   home: "Home",
   activities: "Activities",
   rewards: "Rewards",

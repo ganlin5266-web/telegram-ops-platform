@@ -141,12 +141,11 @@ async function ready() {
       (screen.getByLabelText("Telegram Bot") as HTMLSelectElement).value,
     ).toBe("a1"),
   );
-  await screen.findByText("users.read、points.adjust").catch(() => {});
 }
 async function users() {
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /Telegram 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
   await screen.findByText("Ana Silva");
 }
 async function detail() {
@@ -254,7 +253,7 @@ it("bot switch rejects late user response from old scope", async () => {
         : undefined;
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /Telegram 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
   await waitFor(() => expect(resolve).toBeTypeOf("function"));
   fireEvent.change(screen.getByLabelText("Telegram Bot"), {
     target: { value: "a2" },
@@ -366,7 +365,7 @@ it("403 users endpoint shows permission error", async () => {
     p.includes("/users?") ? response({ error: "forbidden" }, 403) : undefined;
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /Telegram 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
   await screen.findByText("你没有权限执行此操作");
   expect(screen.queryByText("Ana Silva")).toBeNull();
 });
@@ -374,7 +373,7 @@ it("no users.read permission prevents user endpoint calls", async () => {
   grants = [];
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /Telegram 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
   await screen.findByText("你没有权限查看当前 Bot 用户。");
   expect(calls.some((x) => x.path.includes("/users?"))).toBe(false);
 });
@@ -385,7 +384,7 @@ it("network failure exits loading into retryable error", async () => {
       : undefined;
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /Telegram 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
   await screen.findByText("网络连接失败，请检查网络后重试");
   expect(screen.queryByText("正在加载…")).toBeNull();
 });
@@ -396,11 +395,12 @@ it("empty users are shown explicitly", async () => {
       : undefined;
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /Telegram 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
   await screen.findByText("当前批次暂无用户");
 });
 it("Chinese UI never writes bot or user language", async () => {
   await ready();
+  fireEvent.click(screen.getByRole("button", { name: /⚙ 设置/ }));
   expect(screen.getAllByText(/pt-BR/).length).toBeGreaterThan(0);
   expect(
     calls.every((x) => !x.options.method || x.options.method === "GET"),
@@ -725,7 +725,7 @@ it("center: audit.read reveals explicitly Bot scoped logs", async () => {
         })
       : undefined;
   await detail();
-  fireEvent.click(screen.getByRole("tab", { name: "操作记录" }));
+  fireEvent.click(screen.getByText("高级 · 操作记录 / 证据"));
   await screen.findByText("安全摘要");
   expect(screen.getByText("当前 Bot 操作日志")).toBeTruthy();
   expect(apiCalls("/audit-logs?").at(-1)?.path).not.toContain("userId=");
@@ -742,7 +742,7 @@ it("center: audit 403 is local and overview remains usable", async () => {
       ? response({ error: "forbidden" }, 403)
       : undefined;
   await detail();
-  fireEvent.click(screen.getByRole("tab", { name: "操作记录" }));
+  fireEvent.click(screen.getByText("高级 · 操作记录 / 证据"));
   await screen.findByText("你没有权限执行此操作");
   expect(screen.getByRole("dialog")).toBeTruthy();
   fireEvent.click(screen.getByRole("tab", { name: "概览" }));
@@ -852,7 +852,7 @@ it("center: reset removes filters and pagination history", async () => {
 });
 it("center: mobile filter dialog exposes controls and closes", async () => {
   await users();
-  fireEvent.click(screen.getByText("筛选与排序"));
+  fireEvent.click(screen.getByRole("button", { name: "筛选与排序" }));
   const dialog = within(screen.getByRole("dialog", { name: "筛选与排序" }));
   fireEvent.change(dialog.getByLabelText("用户状态"), {
     target: { value: "blocked" },

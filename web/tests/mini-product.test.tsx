@@ -48,10 +48,14 @@ describe("Mini product presentation", () => {
   it("empty/new member sees a clear next action, never a giant missing-account card", async () => {
     await open();
     expect(screen.getByTestId("today-focus").textContent).toContain(
-      "你的会员中心已经准备好了",
+      "等级即将开放",
     );
     expect(screen.queryByText("暂无积分账户")).toBeNull();
-    expect(screen.getByRole("button", { name: "查看即将开放" })).toBeTruthy();
+    expect(
+      within(screen.getByTestId("today-focus")).getByRole("button", {
+        name: "会员",
+      }),
+    ).toBeTruthy();
     expect(screen.getByText("STAGING")).toBeTruthy();
   });
   it("activity templates remain disabled with no invented amount, rules or progress", async () => {
@@ -67,7 +71,9 @@ describe("Mini product presentation", () => {
   });
   it("rewards separate points, ledger and real redemption history", async () => {
     const u = await open();
-    await u.click(nav().getByRole("button", { name: "奖励", exact: true }));
+    await u.click(
+      screen.getByRole("button", { name: "奖励中心", exact: true }),
+    );
     await screen.findByText("还没有积分记录");
     expect(
       (screen.getByRole("button", { name: /兑换中心/ }) as HTMLButtonElement)
@@ -80,7 +86,9 @@ describe("Mini product presentation", () => {
   });
   it("invitations show the future journey without a fake sharing link", async () => {
     const u = await open();
-    await u.click(nav().getByRole("button", { name: "邀请", exact: true }));
+    await u.click(
+      screen.getByRole("button", { name: "邀请好友", exact: true }),
+    );
     await screen.findByText("还没有邀请记录");
     expect(screen.getByText("分享专属入口")).toBeTruthy();
     expect(screen.queryByText("复制邀请链接")).toBeNull();
@@ -89,9 +97,7 @@ describe("Mini product presentation", () => {
   it("game placeholder cannot grant chances; personal page hides technical names and IDs", async () => {
     const u = await open();
     await u.click(screen.getByRole("button", { name: "小游戏 即将开放" }));
-    expect(
-      screen.getByRole("heading", { name: "游戏中心即将开放" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "小游戏" })).toBeTruthy();
     await u.click(nav().getByRole("button", { name: "我的", exact: true }));
     expect(screen.getByText("平台账号")).toBeTruthy();
     expect(screen.getByText("我的权益")).toBeTruthy();

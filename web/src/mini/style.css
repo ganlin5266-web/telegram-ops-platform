@@ -622,4 +622,269 @@ nav button {
     max-width: 140px;
   }
 }
-.platform-account{padding:18px 0;border-bottom:1px solid #e0e7db}.platform-account button,.platform-accounts>button{border:1px solid #b9cbb4;border-radius:10px;background:#e8efe5;color:#153d32;padding:10px 14px;min-height:44px}.platform-account input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #a9baa4;border-radius:10px;font:inherit;margin-top:8px}.platform-account label{display:block;margin-top:16px}.platform-accounts{padding:14px;margin:10px 0}.platform-account .badge{display:inline-block}.platform-account .badge+p{font-family:monospace}
+.platform-account {
+  padding: 18px 0;
+  border-bottom: 1px solid #e0e7db;
+}
+.platform-account button,
+.platform-accounts > button {
+  border: 1px solid #b9cbb4;
+  border-radius: 10px;
+  background: #e8efe5;
+  color: #153d32;
+  padding: 10px 14px;
+  min-height: 44px;
+}
+.platform-account input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #a9baa4;
+  border-radius: 10px;
+  font: inherit;
+  margin-top: 8px;
+}
+.platform-account label {
+  display: block;
+  margin-top: 16px;
+}
+.platform-accounts {
+  padding: 14px;
+  margin: 10px 0;
+}
+.platform-account .badge {
+  display: inline-block;
+}
+.platform-account .badge + p {
+  font-family: monospace;
+}
+
+/* Member product foundation: calm ink, generous spacing, one clear focus. */
+:root {
+  color: #202f2d;
+  background: #f6f7f4;
+  font-size: 15px;
+}
+.mini-shell {
+  max-width: 620px;
+  padding-inline: 20px;
+}
+.mini-shell header {
+  padding: 22px 0 8px;
+}
+.mini-shell h1 {
+  font-size: 27px;
+  letter-spacing: -0.8px;
+}
+.mini-shell h2 {
+  font-size: 19px;
+  letter-spacing: -0.35px;
+}
+.mini-shell .title {
+  margin: 24px 0 18px;
+}
+.mini-shell .card {
+  border: 1px solid #e1e6df;
+  border-radius: 20px;
+  box-shadow: 0 3px 12px #1b352306;
+  padding: 22px;
+  margin-bottom: 16px;
+}
+.mini-shell button {
+  border-radius: 12px;
+  min-height: 44px;
+}
+.mini-shell button:disabled {
+  cursor: not-allowed;
+}
+.mini-shell .brand-mark {
+  background: #253d33;
+  color: #faf6e8;
+  border-radius: 12px;
+}
+.mini-shell .badge {
+  font-size: 11px;
+  letter-spacing: 0.1px;
+}
+.member-pass {
+  position: relative;
+  overflow: hidden;
+  background: #203d33;
+  color: #f4f3e9;
+  border-radius: 24px;
+  padding: 25px;
+  margin-bottom: 24px;
+  box-shadow: 0 12px 26px #18352c17;
+}
+.member-pass:after {
+  content: "";
+  position: absolute;
+  width: 190px;
+  height: 190px;
+  border: 1px solid #e5edcf1a;
+  border-radius: 50%;
+  right: -65px;
+  top: -70px;
+  pointer-events: none;
+}
+.member-pass h2 {
+  font-size: 27px;
+  font-weight: 550;
+  letter-spacing: -0.7px;
+  margin: 24px 0;
+}
+.pass-top,
+.pass-growth {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.pass-top {
+  color: #d4ddc7;
+  font-size: 12px;
+}
+.pass-top > span:last-child {
+  font-size: 30px;
+}
+.pass-growth {
+  font-size: 12px;
+}
+.member-pass p {
+  color: #d3dfd7;
+  font-size: 12px;
+  max-width: 34em;
+}
+.member-pass button {
+  background: #e5eace;
+  color: #24392f;
+  border: none;
+  padding: 10px 20px;
+  font-weight: 650;
+  margin-top: 10px;
+}
+.growth-track {
+  height: 4px;
+  border-radius: 4px;
+  background: #ffffff20;
+  margin: 12px 0;
+}
+.benefit-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 18px;
+  background: #ebeede;
+  border-radius: 18px;
+}
+.benefit-strip div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.benefit-strip small {
+  color: #6a776b;
+  font-size: 11px;
+}
+.mini-shell .summary strong {
+  font-size: 25px;
+  letter-spacing: -0.7px;
+}
+.mini-shell .summary button {
+  border: 0;
+  background: white;
+  padding: 18px 8px;
+}
+.mini-shell .section-title {
+  font-size: 16px;
+  margin: 28px 0 14px;
+}
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.mini-shell .game-tile {
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.game-glyph {
+  height: 72px;
+  display: grid;
+  place-items: center;
+  font-size: 46px;
+  color: #4b6857;
+}
+.game-tile button {
+  width: 100%;
+  font-size: 12px;
+}
+.activity-invite {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  background: #e9eddf;
+  border: 0;
+}
+.mini-shell nav {
+  border-top: 1px solid #e5e8df;
+  background: #fafbf8f5;
+  backdrop-filter: blur(12px);
+}
+.mini-shell nav button {
+  font-size: 11px;
+}
+.mini-shell nav button[aria-current="page"] {
+  color: #284b3b;
+  background: #eaf0e2;
+}
+.mini-shell .links button {
+  padding-block: 19px;
+}
+.mini-shell .logout {
+  background: transparent;
+  border-color: #dfe4da;
+}
+.mini-shell .recommend {
+  gap: 9px;
+}
+.mini-shell .recommend strong {
+  font-size: 12px;
+}
+.mini-shell details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.mini-shell * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 360px) {
+  .mini-shell {
+    padding-inline: 14px;
+  }
+  .member-pass {
+    padding: 21px;
+  }
+  .mini-shell h1 {
+    font-size: 24px;
+  }
+  .mini-shell .summary strong {
+    font-size: 21px;
+  }
+  .mini-shell .quick-grid {
+    gap: 8px;
+  }
+  .mini-shell .quick-grid strong {
+    font-size: 11px;
+  }
+  .mini-shell .game-tile {
+    padding: 16px 12px;
+  }
+}

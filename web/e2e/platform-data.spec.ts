@@ -39,7 +39,11 @@ test("P4 real API browser upload preflight explicit activate duplicate and revis
     },
   );
   expect(res.ok()).toBeTruthy();
-  await page.getByRole("button", { name: "▤ 平台数据" }).click();
+  await page.getByRole("button", { name: "▤ 数据", exact: true }).click();
+  await page
+    .getByRole("button", { name: "平台数据", exact: true })
+    .first()
+    .click();
   await expect(
     page.getByRole("heading", {
       name: "平台数据 · 用户日报",
@@ -55,25 +59,21 @@ test("P4 real API browser upload preflight explicit activate duplicate and revis
     .getByLabel("导入说明", { exact: true })
     .fill("STAGING SYNTHETIC UI");
   await page.getByText("列映射与格式说明", { exact: true }).click();
-  await page
-    .getByLabel("显式列映射 JSON")
-    .fill(
-      JSON.stringify({
-        uid: "uid",
-        deposit: "deposit",
-        withdrawal: "withdrawal",
-        source_net: "source_net",
-      }),
-    );
+  await page.getByLabel("显式列映射 JSON").fill(
+    JSON.stringify({
+      uid: "uid",
+      deposit: "deposit",
+      withdrawal: "withdrawal",
+      source_net: "source_net",
+    }),
+  );
   const csv =
     "uid,deposit,withdrawal,source_net\nBRTEST10001,100.00,30.00,70.00\nBRTEST_UNKNOWN01,0,,\n";
-  await page
-    .getByLabel("Excel / CSV", { exact: true })
-    .setInputFiles({
-      name: "STAGING-SYNTHETIC.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(csv),
-    });
+  await page.getByLabel("Excel / CSV", { exact: true }).setInputFiles({
+    name: "STAGING-SYNTHETIC.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(csv),
+  });
   await page.getByRole("button", { name: "上传并预检" }).click();
   await expect(
     page.getByRole("heading", { name: "批次详情", exact: true }),
@@ -94,15 +94,13 @@ test("P4 real API browser upload preflight explicit activate duplicate and revis
     page.getByRole("button", { name: "事实与 Revision" }),
   ).toHaveCount(2);
   await page.getByLabel("这是同日、同范围修正版（仍需预检与确认）").check();
-  await page
-    .getByLabel("Excel / CSV", { exact: true })
-    .setInputFiles({
-      name: "STAGING-SYNTHETIC-revision.csv",
-      mimeType: "text/csv",
-      buffer: Buffer.from(
-        csv.replace("100.00,30.00,70.00", "110.00,30.00,80.00"),
-      ),
-    });
+  await page.getByLabel("Excel / CSV", { exact: true }).setInputFiles({
+    name: "STAGING-SYNTHETIC-revision.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from(
+      csv.replace("100.00,30.00,70.00", "110.00,30.00,80.00"),
+    ),
+  });
   await page.getByRole("button", { name: "上传并预检" }).click();
   await expect(activate).toBeDisabled();
   await page
