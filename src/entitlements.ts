@@ -1,3 +1,4 @@
+import { resolveMappingSemantics } from "./entitlement-mapping.js";
 import { randomUUID } from "node:crypto";
 import {
   DomainError,
@@ -47,30 +48,7 @@ export async function entitlementAudit(
     ],
   );
 }
-export function mappingApproval(mapping: Record<string, any>) {
-  const field = mapping.definition?.fields?.find(
-    (f: any) => f.target === "deposit",
-  );
-  const explicit =
-    mapping.adapterId === "explicit-canonical" &&
-    mapping.mappingVersion === "1" &&
-    typeof mapping.definition?.mapping?.deposit === "string";
-  if (
-    mapping.status !== "active" ||
-    !mapping.fieldAvailability?.deposit ||
-    (!explicit &&
-      (!field || field.review || field.semantics !== "source_reported_deposit"))
-  )
-    throw new DomainError("entitlement_metric_semantics_unapproved", 400);
-  return {
-    adapterId: mapping.adapterId,
-    mappingVersion: mapping.mappingVersion,
-    definitionFingerprint: inputFingerprint(mapping.definition),
-    semantics: "source_reported_deposit",
-    canonicalField: "deposit",
-  };
-}
-async function validateRule(tx: Queryable, s: Scope, r: RuleInput) {
+export async function validateRule(tx: Queryable, s: Scope, r: RuleInput) {
   validateCalendar(r);
   const platform = await one(
     tx,
@@ -83,12 +61,14 @@ async function validateRule(tx: Queryable, s: Scope, r: RuleInput) {
     platform.timezone !== r.sourceTimezone
   )
     throw new DomainError("entitlement_platform_mismatch", 400);
-  const batch = await one(
+  return resolveMappingSemantics(
     tx,
-    "SELECT mapping FROM platform_import_batches WHERE brand_id=$1 AND platform_id=$2 AND id=$3",
-    [s.brandId, r.platformId, r.mappingBatchId],
+    s,
+    r.platformId,
+    r.mappingBatchId,
+    r.currency,
+    r.sourceTimezone,
   );
-  return mappingApproval(batch.mapping);
 }
 export async function createEntitlementRule(
   db: Database,
@@ -318,7 +298,14 @@ export async function readEvaluationInput(tx: Queryable, t: Target, now: Date) {
   let compatible = false;
   if (fact)
     try {
-      mapping = mappingApproval(fact.mapping);
+      mapping = await resolveMappingSemantics(
+        tx,
+        t,
+        t.platformId,
+        fact.batch_id,
+        platform.currency,
+        platform.timezone,
+      );
       compatible =
         !!rule &&
         inputFingerprint(mapping) === inputFingerprint(rule.mapping_approval);
@@ -344,7 +331,7 @@ export async function readEvaluationInput(tx: Queryable, t: Target, now: Date) {
     factPresent: !!fact,
     completeness: fact?.completeness ?? null,
     conflicting: fact?.batch_status === "review_required",
-    metricAvailable: fact?.mapping.fieldAvailability?.deposit === true,
+    metricAvailable: mapping.canonicalField === "deposit",
     mappingCompatible: compatible,
     value: fact?.deposit ?? null,
     factCurrency: fact?.currency ?? null,

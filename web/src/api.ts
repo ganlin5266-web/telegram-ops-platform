@@ -7,6 +7,8 @@ export class ApiError extends Error {
   }
 }
 export function message(status: number, code = ""): string {
+  if (code === "entitlement_metric_semantics_unapproved")
+    return "当前平台数据字段尚未通过资格规则语义校验";
   if (code === "insufficient_available_points") return "可用积分不足";
   if (code === "point_expiry_policy_required")
     return "当前来源未配置积分有效期策略，请先发布策略";

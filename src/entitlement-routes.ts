@@ -11,6 +11,7 @@ import {
 } from "./entitlement-domain.js";
 import {
   entitlementsEnabled,
+  validateRule,
   createEntitlementRule,
   changeEntitlementRule,
   scheduleEntitlements,
@@ -89,6 +90,7 @@ export function attachEntitlements(
       .object({ rule: ruleInput, value: amountInput })
       .strict()
       .parse(req.body);
+    await validateRule(db, s, b.rule);
     return decideEntitlement({
       identityStatus: "verified",
       ruleAvailable: true,

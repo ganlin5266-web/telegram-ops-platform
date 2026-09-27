@@ -1,3 +1,5 @@
+import { normalizeRow, stable, digest } from "../src/platform-data-input.js";
+import { resolveMappingSemantics } from "../src/entitlement-mapping.js";
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -40,7 +42,11 @@ after(async () => {
   delete process.env.DAILY_ENTITLEMENTS_ENABLED;
   await close();
 });
-async function fixture(value = "100") {
+async function fixture(
+  value = "100",
+  legacy = false,
+  initialCompleteness = "complete",
+) {
   delete process.env.DAILY_ENTITLEMENTS_ENABLED;
   const b = await one(
     db,
@@ -108,7 +114,7 @@ async function fixture(value = "100") {
     completeness = "complete",
     replacement = false,
   ) => {
-    const pre = await preflightImport(
+    const pre = await (legacy ? legacyPreflight : preflightImport)(
       db,
       p,
       s,
@@ -134,7 +140,7 @@ async function fixture(value = "100") {
     await activateImport(db, p, s, batchId, true, "p5b");
     return batchId;
   };
-  const batchId = await importFact(value);
+  const batchId = await importFact(value, "2026-09-26", initialCompleteness);
   const rule = {
     platformId: platform.id,
     name: "STAGING TEST ONLY",
@@ -444,12 +450,53 @@ test("P5B incomplete pending still creates one SLA warning at cutoff", async () 
   await f.importFact("600", "2026-09-27", "incomplete");
   process.env.DAILY_ENTITLEMENTS_ENABLED = "true";
   const t = { ...f.t, entitlementDate: "2026-09-28" };
-  const before = await evaluateEntitlement(db,t,"test","p5b",new Date("2026-09-28T14:59:00Z"));
-  const after = await evaluateEntitlement(db,t,"cutoff_sla","p5b",new Date("2026-09-28T15:00:00Z"));
-  assert.notEqual(before.revisionId,after.revisionId);
-  assert.equal((await one(db,"SELECT status FROM daily_entitlement_revisions WHERE id=$1",[after.revisionId])).status,"pending");
-  assert.equal((await evaluateEntitlement(db,t,"cutoff_sla","p5b",new Date("2026-09-28T15:01:00Z"))).outcome,"unchanged");
-  assert.equal((await one(db,"SELECT count(*)::int AS n FROM entitlement_sla_findings WHERE daily_entitlement_id=$1",[after.id])).n,1);
+  const before = await evaluateEntitlement(
+    db,
+    t,
+    "test",
+    "p5b",
+    new Date("2026-09-28T14:59:00Z"),
+  );
+  const after = await evaluateEntitlement(
+    db,
+    t,
+    "cutoff_sla",
+    "p5b",
+    new Date("2026-09-28T15:00:00Z"),
+  );
+  assert.notEqual(before.revisionId, after.revisionId);
+  assert.equal(
+    (
+      await one(
+        db,
+        "SELECT status FROM daily_entitlement_revisions WHERE id=$1",
+        [after.revisionId],
+      )
+    ).status,
+    "pending",
+  );
+  assert.equal(
+    (
+      await evaluateEntitlement(
+        db,
+        t,
+        "cutoff_sla",
+        "p5b",
+        new Date("2026-09-28T15:01:00Z"),
+      )
+    ).outcome,
+    "unchanged",
+  );
+  assert.equal(
+    (
+      await one(
+        db,
+        "SELECT count(*)::int AS n FROM entitlement_sla_findings WHERE daily_entitlement_id=$1",
+        [after.id],
+      )
+    ).n,
+    1,
+  );
 });
 test("P5B future version does not rewrite past entitlement and retired rule keeps evidence", async () => {
   const f = await fixture();
@@ -546,13 +593,20 @@ test(
     // Disposable test-only login; do not mutate the shared runtime role or assume trust authentication.
     const role = "p5b_rt_" + randomUUID().replaceAll("-", "");
     const password = randomUUID();
-    await db.query(`CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`);
+    await db.query(
+      `CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`,
+    );
     const url = new URL(process.env.TEST_DATABASE_URL!);
     url.username = role;
     url.password = password;
     const runtime = postgres(url.toString());
     try {
-      await db.query((await readFile("db/runtime-grants.sql", "utf8")).replaceAll("telegram_app",role));
+      await db.query(
+        (await readFile("db/runtime-grants.sql", "utf8")).replaceAll(
+          "telegram_app",
+          role,
+        ),
+      );
       assert.equal(
         (await one(runtime, "SELECT current_user AS role")).role,
         role,
@@ -697,15 +751,241 @@ test("P5B administrator API RBAC, sensitive explanation and Mini boundary remain
     await app.close();
   }
 });
-test('P5B task lease recovery, transient retry and business pending completes without retry loop',async()=>{
- const f=await fixture();await f.publish();process.env.DAILY_ENTITLEMENTS_ENABLED='true';
- await scheduleEntitlements(db,f.s,f.platform.id,'2026-09-28','manual_recalculate','p5b');
- const task=await one(db,'SELECT id FROM entitlement_evaluation_tasks WHERE brand_id=$1 ORDER BY created_at LIMIT 1',[f.s.brandId]);
- let fail=true;
- const wrapped:Database={...db,transaction:fn=>db.transaction(tx=>fn({query:async(sql,params)=>{if(fail&&sql.startsWith('SELECT id FROM platforms')){fail=false;throw Object.assign(new Error('test'),{code:'40001'})}return tx.query(sql,params)}}))};
- const retry=await runEntitlementTasks(wrapped,f.s,1);assert.equal(retry[0]?.outcome,'transient_error');
- await db.query("UPDATE entitlement_evaluation_tasks SET next_attempt_at=now()-interval '1 second' WHERE id=$1",[task.id]);
- const recovered=await runEntitlementTasks(db,f.s,1);assert.equal(recovered[0]?.outcome,'changed');
- assert.equal((await one(db,'SELECT status,attempts FROM entitlement_evaluation_tasks WHERE id=$1',[task.id])).status,'completed');
- assert.equal((await runEntitlementTasks(db,f.s,1)).length,0);
+test("P5B task lease recovery, transient retry and business pending completes without retry loop", async () => {
+  const f = await fixture();
+  await f.publish();
+  process.env.DAILY_ENTITLEMENTS_ENABLED = "true";
+  await scheduleEntitlements(
+    db,
+    f.s,
+    f.platform.id,
+    "2026-09-28",
+    "manual_recalculate",
+    "p5b",
+  );
+  const task = await one(
+    db,
+    "SELECT id FROM entitlement_evaluation_tasks WHERE brand_id=$1 ORDER BY created_at LIMIT 1",
+    [f.s.brandId],
+  );
+  let fail = true;
+  const wrapped: Database = {
+    ...db,
+    transaction: (fn) =>
+      db.transaction((tx) =>
+        fn({
+          query: async (sql, params) => {
+            if (fail && sql.startsWith("SELECT id FROM platforms")) {
+              fail = false;
+              throw Object.assign(new Error("test"), { code: "40001" });
+            }
+            return tx.query(sql, params);
+          },
+        }),
+      ),
+  };
+  const retry = await runEntitlementTasks(wrapped, f.s, 1);
+  assert.equal(retry[0]?.outcome, "transient_error");
+  await db.query(
+    "UPDATE entitlement_evaluation_tasks SET next_attempt_at=now()-interval '1 second' WHERE id=$1",
+    [task.id],
+  );
+  const recovered = await runEntitlementTasks(db, f.s, 1);
+  assert.equal(recovered[0]?.outcome, "changed");
+  assert.equal(
+    (
+      await one(
+        db,
+        "SELECT status,attempts FROM entitlement_evaluation_tasks WHERE id=$1",
+        [task.id],
+      )
+    ).status,
+    "completed",
+  );
+  assert.equal((await runEntitlementTasks(db, f.s, 1)).length, 0);
+});
+
+// Reproduce the historical 009 writer in an isolated test database, not by
+// patching immutable modern batches. Only explicit synthetic cells are used.
+async function legacyPreflight(
+  db: Database,
+  p: { adminId: string },
+  s: { brandId: string; botId: string },
+  v: any,
+  _requestId: string,
+) {
+  return db.transaction(async (tx) => {
+    const platform = await one(tx, "SELECT * FROM platforms WHERE id=$1", [
+      v.platformId,
+    ]);
+    const amount = Buffer.from(v.fileBase64, "base64")
+      .toString()
+      .split("\n")[1]!
+      .split(",")[1]!;
+    const raw = { uid: "SYNTHETIC01", deposit: amount },
+      n = normalizeRow(raw, v.mapping, platform, 2);
+    const meta = { ...v, fileBase64: undefined, filename: undefined };
+    const b = await one(
+      tx,
+      `INSERT INTO platform_import_batches(brand_id,platform_id,business_date,timezone,currency,source_type,original_filename,file_digest,metadata_digest,scope_digest,coverage,mapping,completeness,replacement,reason,row_count,accepted_rows,rejected_rows,warning_rows,status,issues,created_by) VALUES($1,$2,$3,$4,$5,'csv',$6,$7,$8,$9,$10,$11,$12,$13,$14,1,1,0,1,'ready','[]',$15) RETURNING id`,
+      [
+        s.brandId,
+        v.platformId,
+        v.businessDate,
+        v.timezone,
+        v.currency,
+        v.filename,
+        digest(Buffer.from(v.fileBase64, "base64")),
+        digest(stable(meta)),
+        digest(
+          stable({
+            coverage: v.coverage,
+            timezone: v.timezone,
+            currency: v.currency,
+          }),
+        ),
+        JSON.stringify(v.coverage),
+        JSON.stringify(v.mapping),
+        v.completeness,
+        v.replacement,
+        v.reason,
+        p.adminId,
+      ],
+    );
+    await tx.query(
+      `INSERT INTO platform_import_evidence(brand_id,platform_id,business_date,batch_id,row_number,raw_values,row_digest,normalized,issues) VALUES($1,$2,$3,$4,2,$5,$6,$7,$8)`,
+      [
+        s.brandId,
+        v.platformId,
+        v.businessDate,
+        b.id,
+        JSON.stringify(raw),
+        digest(stable(raw)),
+        JSON.stringify(n.normalized),
+        JSON.stringify(n.issues),
+      ],
+    );
+    return b;
+  });
+}
+test("P5B historical 009 Draft, Preview and Evaluation share strict semantics without rewriting P4", async () => {
+  const f = await fixture("100.01", true);
+  const before = await one(
+    db,
+    "SELECT mapping,mapping_digest FROM platform_import_batches WHERE id=$1",
+    [f.batchId],
+  );
+  const approval = await resolveMappingSemantics(
+    db,
+    f.s,
+    f.platform.id,
+    f.batchId,
+    "BRL",
+    "America/Sao_Paulo",
+  );
+  assert.equal(
+    (approval as any).semanticsSource,
+    "legacy_explicit_canonical_v1",
+  );
+  assert.equal((approval as any).adapterId, undefined);
+  const { createApp } = await import("../src/app.js");
+  const app = createApp(
+    db,
+    () => {
+      throw Error("Telegram forbidden");
+    },
+    async () => f.p,
+  );
+  try {
+    for (const [value, tier] of [
+      ["0", null],
+      ["99.99", null],
+      ["100", "tier_1"],
+      ["100.01", "tier_1"],
+      ["499.99", "tier_1"],
+      ["500", "tier_2"],
+      ["500.01", "tier_2"],
+      ["999.99", "tier_2"],
+      ["1000", "tier_3"],
+      ["1000.01", "tier_3"],
+      ["1500", "tier_3"],
+    ]) {
+      const r = await app.inject({
+        method: "POST",
+        url: `/v1/brands/${f.s.brandId}/bots/${f.s.botId}/entitlements/rules/preview`,
+        headers: { authorization: "Bearer test-admin" },
+        payload: { rule: f.rule, value },
+      });
+      assert.equal(r.statusCode, 200);
+      assert.equal(r.json().matchedTier, tier);
+    }
+    const rejected = await app.inject({
+      method: "POST",
+      url: `/v1/brands/${f.s.brandId}/bots/${f.s.botId}/entitlements/rules/preview`,
+      headers: { authorization: "Bearer test-admin" },
+      payload: { rule: { ...f.rule, currency: "USD" }, value: "500" },
+    });
+    assert.equal(rejected.statusCode, 400);
+    assert.equal(
+      (
+        await one(
+          db,
+          "SELECT count(*)::int AS n FROM daily_entitlements WHERE brand_id=$1",
+          [f.s.brandId],
+        )
+      ).n,
+      0,
+    );
+    await f.publish();
+    process.env.DAILY_ENTITLEMENTS_ENABLED = "true";
+    const r = await evaluateEntitlement(db, f.t, "test", "p5b");
+    const revision = await one(
+      db,
+      "SELECT source_value::text,source_metric_semantics,status FROM daily_entitlement_revisions WHERE daily_entitlement_id=$1",
+      [r.id],
+    );
+    assert.equal(revision.source_value, "100.010000");
+    assert.equal(revision.status, "eligible");
+    assert.deepEqual(revision.source_metric_semantics, approval);
+    assert.deepEqual(
+      await one(
+        db,
+        "SELECT mapping,mapping_digest FROM platform_import_batches WHERE id=$1",
+        [f.batchId],
+      ),
+      before,
+    );
+  } finally {
+    await app.close();
+  }
+});
+test("P5B historical NULL is approved semantics but never zero/eligible", async () => {
+  const f = await fixture("", true);
+  await f.publish();
+  process.env.DAILY_ENTITLEMENTS_ENABLED = "true";
+  const r = await evaluateEntitlement(db, f.t, "test", "p5b");
+  const rev = await one(
+    db,
+    "SELECT source_value,status FROM daily_entitlement_revisions WHERE daily_entitlement_id=$1",
+    [r.id],
+  );
+  assert.equal(rev.source_value, null);
+  assert.equal(rev.status, "pending");
+});
+
+test("P5B historical incomplete mapping remains pending during evaluation", async () => {
+  const f = await fixture("1000", true, "incomplete");
+  await f.publish();
+  process.env.DAILY_ENTITLEMENTS_ENABLED = "true";
+  const r = await evaluateEntitlement(db, f.t, "test", "p5b");
+  assert.equal(
+    (
+      await one(
+        db,
+        "SELECT status FROM daily_entitlement_revisions WHERE daily_entitlement_id=$1",
+        [r.id],
+      )
+    ).status,
+    "pending",
+  );
 });
