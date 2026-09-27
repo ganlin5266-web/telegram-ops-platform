@@ -492,7 +492,7 @@ export default function App() {
           <div className="admin">
             <span className="avatar">{me.displayName.slice(0, 1)}</span>
             <div>
-              {me.displayName}
+              <span>{me.displayName}</span>
               <small>简体中文 · {me.uiLanguage}</small>
             </div>
             <button

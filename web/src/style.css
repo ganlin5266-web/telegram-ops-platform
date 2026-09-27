@@ -950,11 +950,15 @@ select:focus-visible {
 .sidebar .logo {
   letter-spacing: 1px;
 }
+.sidebar .logo > span {
+  color: #edf1e5;
+}
 .workspace > header {
   background: #ffffffee;
   border-bottom: 1px solid #e3e7de;
 }
 .workspace main {
+  width: 100%;
   max-width: 1540px;
   margin: auto;
   padding: 34px;
