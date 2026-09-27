@@ -187,6 +187,7 @@ export function attachEntitlements(
           ...r
         }) => ({
           ...r,
+          conflict_evidence: result_snapshot?.conflicts ?? [],
           ...(sensitive
             ? {
                 source_value,

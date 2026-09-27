@@ -10,7 +10,7 @@ const stateLabels: Record<string, string> = {
   pending: "待数据/规则",
   eligible: "符合资格",
   ineligible: "未达到门槛",
-  review_required: "需要复核",
+  review_required: "待复核",
   draft: "草稿",
   published: "已发布",
   retired: "已停用",
@@ -27,7 +27,8 @@ export default function Entitlements({
     [platforms, setPlatforms] = useState<any[]>([]),
     [batches, setBatches] = useState<any[]>([]),
     [rows, setRows] = useState<any[]>([]),
-    [detail, setDetail] = useState<any>(null);
+    [detail, setDetail] = useState<any>(null),
+    [conflictDetail, setConflictDetail] = useState<any>(null);
   const [enabled, setEnabled] = useState(false),
     [ready, setReady] = useState(false),
     [busy, setBusy] = useState(false),
@@ -70,6 +71,7 @@ export default function Entitlements({
     }
   };
   useEffect(() => {
+    setConflictDetail(null);
     if (!permissions.includes("entitlements.read")) return;
     let live = true;
     Promise.all([
@@ -171,6 +173,7 @@ export default function Entitlements({
               setTab(id!);
               setRows([]);
               setDetail(null);
+              setConflictDetail(null);
             }}
             aria-pressed={tab === id}
           >
@@ -188,6 +191,7 @@ export default function Entitlements({
             setPlatformId(id);
             setRows([]);
             setDetail(null);
+            setConflictDetail(null);
             const p = platforms.find((p) => p.id === id);
             if (p)
               setForm((v) => ({
@@ -480,7 +484,11 @@ export default function Entitlements({
                   </td>
                   <td>
                     {r.matched_tier ?? "—"} /{" "}
-                    {r.reason_code ?? r.last_error_code ?? r.trigger_reason}
+                    {r.reason_code === "conflicting_data"
+                      ? "平台数据存在冲突"
+                      : (r.reason_code ??
+                        r.last_error_code ??
+                        r.trigger_reason)}
                   </td>
                   <td>
                     {tab !== "tasks" && tab !== "sla" && (
@@ -491,7 +499,9 @@ export default function Entitlements({
                           )
                         }
                       >
-                        查看计算历史
+                        {r.reason_code === "conflicting_data"
+                          ? "查看详情"
+                          : "查看计算历史"}
                       </button>
                     )}
                     {r.sla_open ?? r.outcome}
@@ -501,6 +511,23 @@ export default function Entitlements({
             </tbody>
           </table>
           {rows.length === 0 && <p>当前查询暂无记录；未查询不代表数据为 0。</p>}
+          {conflictDetail && (
+            <section aria-label="P4 冲突证据">
+              <h3>P4 冲突证据</h3>
+              <p>
+                批次 {conflictDetail.batch.id} ·{" "}
+                {conflictDetail.batch.business_date} ·{" "}
+                {stateLabels[conflictDetail.batch.status] ??
+                  conflictDetail.batch.status}
+              </p>
+              <p>
+                账户 {conflictDetail.row?.uidMasked} · 行{" "}
+                {conflictDetail.row?.rowNumber}
+              </p>
+              <p>系统识别：平台数据修订需要核对</p>
+              <button onClick={() => setConflictDetail(null)}>关闭证据</button>
+            </section>
+          )}
           {detail && (
             <section>
               <h3>资格解释与历史</h3>
@@ -513,7 +540,9 @@ export default function Entitlements({
                   </h4>
                   <p>
                     {stateLabels[r.status]} / {r.matched_tier ?? "—"} /{" "}
-                    {r.reason_code}
+                    {r.reason_code === "conflicting_data"
+                      ? "平台数据存在冲突"
+                      : r.reason_code}
                   </p>
                   <p>
                     来源日 {r.source_business_date} · 触发 {r.trigger_reason}
@@ -524,6 +553,32 @@ export default function Entitlements({
                       {r.result_snapshot?.currency}
                     </p>
                   )}
+                  {(r.conflict_evidence ?? []).map((e: any) => (
+                    <div key={e.evidence_id}>
+                      <p>
+                        P4 冲突批次：{e.batch_id} · 行证据：{e.evidence_id}
+                      </p>
+                      {permissions.includes("platform_data.read") && (
+                        <button
+                          onClick={() =>
+                            void act(async () => {
+                              const data = await request<any>(
+                                base + "/platform-data/batches/" + e.batch_id,
+                              );
+                              setConflictDetail({
+                                batch: data.batch,
+                                row: data.rows.find(
+                                  (row: any) => row.id === e.evidence_id,
+                                ),
+                              });
+                            })
+                          }
+                        >
+                          查看 P4 冲突证据
+                        </button>
+                      )}
+                    </div>
+                  ))}
                   <dl>
                     {[
                       ["规则版本", r.rule_version_id],

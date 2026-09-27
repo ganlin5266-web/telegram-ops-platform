@@ -258,6 +258,15 @@ export async function preflightImport(
           row.expected,
         ],
       );
+    if (status === "review_required") {
+      for (const row of rows.filter(r => r.issues.some(i => i.code === "revision_comparison_required"))) {
+        const bound = (await tx.query(
+          "SELECT user_id,bot_id FROM platform_identities WHERE brand_id=$1 AND platform_id=$2 AND platform_uid=$3 AND status='verified'",
+          [s.brandId,v.platformId,row.normalized.uid],
+        )).rows[0];
+        if (bound) await enqueueEntitlementSourceChange(tx,s.brandId,v.platformId,"data_conflict",batch.id,v.businessDate,bound.user_id,bound.bot_id);
+      }
+    }
     await audit(tx, p, s, "platform_data.upload", batch.id, requestId);
     await audit(tx, p, s, "platform_data.preflight", batch.id, requestId);
     return { ...batch, duplicate: false };

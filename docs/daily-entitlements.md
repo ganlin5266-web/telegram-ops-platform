@@ -76,3 +76,16 @@ publish fixtures; they do not authorize a Staging publication.
 Staging Schema execution requires strict TLS, expected database identity, independent runtime
 verification, checksum and business fingerprint preflight. No P5-A balances may change.
 Rollback is flag-off and forward repair, never deleting rule/revision history or reverting P4 facts.
+
+### Unresolved P4 comparison findings
+
+A P4 `review_required` batch blocks only verified identities whose canonical UID
+has a `revision_comparison_required` row in that Brand/platform/source date.
+Preflight queues a `data_conflict` evaluation for those identities; it does not
+activate the candidate Fact. Evaluation shares P4's platform lock and records
+batch/evidence/expected-revision IDs in the immutable result snapshot and input
+fingerprint. Repeated observation is a no-op. P4's normal reviewed activation
+resolves that batch and queues evaluation of the new current Fact. Other pending
+comparison batches remain blocking until resolved through P4; P5-B never rewrites
+them. Admins see a review label and can inspect masked P4 evidence through the
+existing P4 read permission. No conflict internals are added to Mini App APIs.

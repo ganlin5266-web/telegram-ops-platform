@@ -16,6 +16,7 @@ import {
   createEntitlementRule,
   changeEntitlementRule,
   evaluateEntitlement,
+  readEvaluationInput,
   scheduleEntitlements,
   runEntitlementTasks,
 } from "../src/entitlements.js";
@@ -988,4 +989,86 @@ test("P5B historical incomplete mapping remains pending during evaluation", asyn
     ).status,
     "pending",
   );
+});
+
+
+test("P4 unresolved comparison evidence blocks only its account/date and resolves through activation", async () => {
+  const f = await fixture("110");
+  await f.publish();
+  process.env.DAILY_ENTITLEMENTS_ENABLED = "true";
+  const baseline = async () => (await db.query(`SELECT
+    (SELECT count(*) FROM point_accounts)::int AS accounts,
+    (SELECT count(*) FROM point_ledger)::int AS ledger,
+    (SELECT count(*) FROM point_lots)::int AS lots,
+    (SELECT count(*) FROM referrals)::int AS referrals,
+    (SELECT count(*) FROM redemptions)::int AS redemptions,
+    (SELECT count(*) FROM redemption_codes)::int AS codes`)).rows[0];
+  const beforeBusiness = await baseline();
+  const first = await evaluateEntitlement(db,f.t,"test","conflict-test");
+  const pre = async (value: string, date = "2026-09-26", uid = "SYNTHETIC01") => preflightImport(db,f.p,f.s,{
+    platformId:f.platform.id,businessDate:date,timezone:"America/Sao_Paulo",currency:"BRL",sourceType:"csv",
+    filename:"STAGING-CONFLICT.csv",fileBase64:Buffer.from(`uid,deposit\n${uid},${value}`).toString("base64"),
+    mapping:{uid:"uid",deposit:"deposit"},coverage:{kind:"full",filter:""},completeness:"complete",replacement:false,reason:"STAGING SYNTHETIC conflict",
+  },"conflict-test");
+  await f.importFact("100","2026-09-25");
+  const otherDate = await pre("500","2026-09-25");
+  assert.equal(otherDate.status,"review_required");
+  assert.equal((await evaluateEntitlement(db,f.t,"test","conflict-test")).outcome,"unchanged");
+  const conflict = await pre("600");
+  assert.equal(conflict.status,"review_required");
+  const queued = await db.query("SELECT * FROM entitlement_evaluation_tasks WHERE brand_id=$1 AND trigger_reason='data_conflict'",[f.s.brandId]);
+  assert.ok(queued.rows.some(r => String(r.entitlement_date).startsWith("2026-09-27") || new Date(r.entitlement_date).toISOString().startsWith("2026-09-27")));
+  const p4Snapshot = async () => (await db.query("SELECT b.*,e.id AS evidence_id,e.normalized,e.issues AS row_issues FROM platform_import_batches b JOIN platform_import_evidence e ON e.batch_id=b.id WHERE b.id=$1",[conflict.id])).rows;
+  const beforeP4 = await p4Snapshot();
+  const blocked = await evaluateEntitlement(db,f.t,"test","conflict-test");
+  const rev = await one(db,"SELECT * FROM daily_entitlement_revisions WHERE id=$1",[blocked.revisionId]);
+  assert.equal(rev.status,"review_required"); assert.equal(rev.reason_code,"conflicting_data");
+  assert.equal(rev.supersedes_revision_id,first.revisionId);
+  assert.equal(rev.result_snapshot.conflicts.length,1);
+  assert.equal(rev.result_snapshot.conflicts[0].batch_id,conflict.id);
+  assert.equal(rev.result_snapshot.conflicts[0].evidence_id,beforeP4[0]!.evidence_id);
+  assert.equal((await evaluateEntitlement(db,f.t,"test","conflict-test")).outcome,"unchanged");
+  assert.deepEqual(await p4Snapshot(),beforeP4);
+  const otherUser = await one(db,"INSERT INTO telegram_users(brand_id,bot_id,telegram_user_id) VALUES($1,$2,999002) RETURNING id",[f.s.brandId,f.s.botId]);
+  assert.equal((await readEvaluationInput(db,{...f.t,userId:otherUser.id},new Date())).input.conflicting,false);
+  await assert.rejects(() => readEvaluationInput(db,{...f.t,botId:randomUUID()},new Date()));
+  await assert.rejects(() => readEvaluationInput(db,{...f.t,brandId:randomUUID()},new Date()));
+  const otherPlatform = await createPlatform(db,f.p,f.s,{code:"OTHER",displayName:"OTHER",market:"BR",timezone:"America/Sao_Paulo",currency:"BRL",verificationMethod:"manual_admin",uidFormat:"alphanumeric",uidCase:"upper",uidMinLength:3,uidMaxLength:64},"test");
+  assert.equal((await readEvaluationInput(db,{...f.t,platformId:otherPlatform.id},new Date())).input.conflicting,false);
+  await activateImport(db,f.p,f.s,conflict.id,true,"conflict-test");
+  const restored = await evaluateEntitlement(db,f.t,"test","conflict-test");
+  const normal = await one(db,"SELECT * FROM daily_entitlement_revisions WHERE id=$1",[restored.revisionId]);
+  assert.equal(normal.status,"eligible"); assert.equal(normal.matched_tier,"tier_2");
+  assert.equal(normal.supersedes_revision_id,blocked.revisionId);
+  assert.deepEqual(normal.result_snapshot.conflicts,[]);
+  assert.equal((await evaluateEntitlement(db,f.t,"test","conflict-test")).outcome,"unchanged");
+  assert.equal((await one(db,"SELECT count(*)::int AS n FROM daily_entitlement_revisions WHERE daily_entitlement_id=$1",[first.id])).n,3);
+  assert.deepEqual(await baseline(),beforeBusiness);
+});
+
+test("P4 conflict row does not contaminate unchanged verified users or another Bot in the same batch", async () => {
+  const f = await fixture("110");
+  const bot = await one(db,"INSERT INTO telegram_bots(brand_id,name,username,token_secret_ref,webhook_secret_ref,default_language,supported_languages,status) VALUES($1,'TEST',$2,$2,$2,'en',ARRAY['en'],'disabled') RETURNING id",[f.s.brandId,randomUUID()]);
+  const targets = [];
+  for (const [index,botId] of [f.s.botId,bot.id].entries()) {
+    const u = await one(db,"INSERT INTO telegram_users(brand_id,bot_id,telegram_user_id) VALUES($1,$2,$3) RETURNING id",[f.s.brandId,botId,990010+index]);
+    const scope = {...f.s,botId};
+    const identity = await submitIdentity(db,{...scope,userId:u.id,sessionId:randomUUID()} as any,f.platform.id,`SYNTHETIC0${index+2}`,randomUUID(),"scope-test");
+    await reviewIdentity(db,f.p,scope,identity.id,{action:"verify",evidenceReference:"CASE-TEST"},"test");
+    targets.push({...f.t,botId,userId:u.id});
+  }
+  const pre = async (value: string,replacement: boolean) => preflightImport(db,f.p,f.s,{
+    platformId:f.platform.id,businessDate:"2026-09-26",timezone:"America/Sao_Paulo",currency:"BRL",sourceType:"csv",filename:"STAGING-SCOPE.csv",
+    fileBase64:Buffer.from(`uid,deposit\nSYNTHETIC01,${value}\nSYNTHETIC02,100\nSYNTHETIC03,100`).toString("base64"),
+    mapping:{uid:"uid",deposit:"deposit"},coverage:{kind:"full",filter:""},completeness:"complete",replacement,reason:"STAGING TEST ONLY",
+  },"scope-test");
+  const initial = await pre("110",true);
+  await activateImport(db,f.p,f.s,initial.id,true,"scope-test");
+  await f.publish(); process.env.DAILY_ENTITLEMENTS_ENABLED="true";
+  const conflict = await pre("600",false);
+  assert.equal(conflict.status,"review_required");
+  assert.equal((await readEvaluationInput(db,f.t,new Date())).conflicts.length,1);
+  for (const t of targets) assert.equal((await readEvaluationInput(db,t,new Date())).conflicts.length,0);
+  const tasks = (await db.query("SELECT DISTINCT user_id FROM entitlement_evaluation_tasks WHERE brand_id=$1 AND trigger_reason='data_conflict'",[f.s.brandId])).rows;
+  assert.deepEqual(tasks.map(t=>t.user_id),[f.user.id]);
 });

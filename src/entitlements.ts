@@ -286,6 +286,20 @@ export async function readEvaluationInput(tx: Queryable, t: Target, now: Date) {
         )
       ).rows[0] ?? null)
     : null;
+  // P4 holds the same platform lock during preflight/activation. Only row-level
+  // comparison findings belonging to this verified account can block its date.
+  const conflicts = identity?.status === "verified"
+    ? (await tx.query(
+        `SELECT b.id AS batch_id,e.id AS evidence_id,e.expected_revision_id
+ FROM platform_import_batches b JOIN platform_import_evidence e
+ ON (e.brand_id,e.platform_id,e.business_date,e.batch_id)=(b.brand_id,b.platform_id,b.business_date,b.id)
+ WHERE b.brand_id=$1 AND b.platform_id=$2 AND b.business_date=$3
+ AND b.status='review_required' AND e.normalized->>'uid'=$4
+ AND e.issues @> '[{"code":"revision_comparison_required"}]'::jsonb
+ ORDER BY b.id,e.id`,
+        [t.brandId,t.platformId,sourceDate,identity.platform_uid],
+      )).rows
+    : [];
   const tiers = rule
     ? (
         await tx.query<{ key: string; threshold: string; name: string }>(
@@ -330,7 +344,7 @@ export async function readEvaluationInput(tx: Queryable, t: Target, now: Date) {
     ruleConflict: versions.length > 1,
     factPresent: !!fact,
     completeness: fact?.completeness ?? null,
-    conflicting: fact?.batch_status === "review_required",
+    conflicting: conflicts.length > 0 || fact?.batch_status === "review_required",
     metricAvailable: mapping.canonicalField === "deposit",
     mappingCompatible: compatible,
     value: fact?.deposit ?? null,
@@ -347,6 +361,7 @@ export async function readEvaluationInput(tx: Queryable, t: Target, now: Date) {
     identity: identitySnapshot,
     ruleVersionId: rule?.id ?? null,
     ruleCandidates: versions.map((v) => v.id),
+    ...(conflicts.length ? { conflicts } : {}),
     factRevisionId: fact?.current_revision_id ?? null,
     value: input.value,
     completeness: input.completeness,
@@ -371,6 +386,7 @@ export async function readEvaluationInput(tx: Queryable, t: Target, now: Date) {
     fingerprint,
     mapping,
     input,
+    conflicts,
   };
 }
 export async function evaluateEntitlement(
@@ -454,6 +470,7 @@ export async function evaluateEntitlement(
             x.rule?.entitlement_timezone ?? x.platform.timezone,
           completeness: x.fact?.completeness ?? null,
           previousStatus: old?.status ?? null,
+          conflicts: x.conflicts,
           matchedTier:
             x.tiers.find((tier) => tier.key === x.decision.matchedTier) ?? null,
         }),

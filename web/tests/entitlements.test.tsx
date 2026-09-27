@@ -64,3 +64,78 @@ it("expired admin session requests user reauthentication", async () => {
   render(<Entitlements {...props} />);
   await vi.waitFor(() => expect(props.onExpire).toHaveBeenCalled());
 });
+
+it("conflict displays operator copy and drills into scoped P4 evidence", async () => {
+  const fetch = vi.fn(async (url: string) => {
+    if (url.includes("/platform-data/batches/conflict-batch"))
+      return response({
+        batch: {
+          id: "conflict-batch",
+          business_date: "2026-09-27",
+          status: "review_required",
+        },
+        rows: [{ id: "evidence", rowNumber: 2, uidMasked: "BR****01" }],
+      });
+    if (url.endsWith("/daily/subject"))
+      return response({
+        subject: { entitlement_date: "2026-09-28", current_revision_id: "rev" },
+        revisions: [
+          {
+            id: "rev",
+            revision_number: 2,
+            status: "review_required",
+            reason_code: "conflicting_data",
+            conflict_evidence: [
+              { batch_id: "conflict-batch", evidence_id: "evidence" },
+            ],
+          },
+        ],
+      });
+    if (url.includes("/daily?"))
+      return response({
+        items: [
+          {
+            id: "subject",
+            status: "review_required",
+            reason_code: "conflicting_data",
+          },
+        ],
+      });
+    if (url.endsWith("/platforms"))
+      return response({ items: [{ id: "platform", display_name: "FUN66" }] });
+    return response({ schemaReady: true, enabled: true, items: [] });
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(
+    <Entitlements
+      {...props}
+      permissions={[...props.permissions, "platform_data.read"]}
+    />,
+  );
+  await screen.findByText("FUN66");
+  await userEvent.click(
+    screen.getByRole("button", { name: "日资格", exact: true }),
+  );
+  await userEvent.selectOptions(screen.getByLabelText("权益平台"), "platform");
+  const input = screen.getByLabelText("权益日期");
+  const { fireEvent } = await import("@testing-library/react");
+  fireEvent.change(input, { target: { value: "2026-09-28" } });
+  await userEvent.click(
+    screen.getByRole("button", { name: "刷新", exact: true }),
+  );
+  await screen.findByText(/平台数据存在冲突/);
+  expect(screen.queryByText("conflicting_data")).toBeNull();
+  await userEvent.click(
+    screen.getByRole("button", { name: "查看详情", exact: true }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "查看 P4 冲突证据" }),
+  );
+  await screen.findByRole("region", { name: "P4 冲突证据" });
+  expect(screen.getByText(/BR\*\*\*\*01/)).toBeTruthy();
+  expect(
+    fetch.mock.calls.some(
+      ([url]) => url === props.base + "/platform-data/batches/conflict-batch",
+    ),
+  ).toBe(true);
+});
