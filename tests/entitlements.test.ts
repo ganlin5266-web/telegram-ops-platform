@@ -543,21 +543,19 @@ test(
       2,
     );
     const { readFile } = await import("node:fs/promises");
-    await db.query(
-      "DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='telegram_app') THEN CREATE ROLE telegram_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS; END IF; END $$",
-    );
-    await db.query(
-      "ALTER ROLE telegram_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS",
-    );
-    await db.query(await readFile("db/runtime-grants.sql", "utf8"));
+    // Disposable test-only login; do not mutate the shared runtime role or assume trust authentication.
+    const role = "p5b_rt_" + randomUUID().replaceAll("-", "");
+    const password = randomUUID();
+    await db.query(`CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`);
     const url = new URL(process.env.TEST_DATABASE_URL!);
-    url.username = "telegram_app";
-    url.password = "";
+    url.username = role;
+    url.password = password;
     const runtime = postgres(url.toString());
     try {
+      await db.query((await readFile("db/runtime-grants.sql", "utf8")).replaceAll("telegram_app",role));
       assert.equal(
         (await one(runtime, "SELECT current_user AS role")).role,
-        "telegram_app",
+        role,
       );
       assert.equal(
         (await evaluateEntitlement(runtime, f.t, "test", "p5b")).outcome,
@@ -592,6 +590,8 @@ test(
       );
     } finally {
       await runtime.close();
+      await db.query(`DROP OWNED BY ${role}`);
+      await db.query(`DROP ROLE ${role}`);
     }
   },
 );
