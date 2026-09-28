@@ -1,7 +1,8 @@
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
 import {migrate} from '../src/migrations.js';
 import {postgres,one,type Database,type Queryable,type Scope} from '../src/db.js';
 import {handleUpdate} from '../src/telegram.js';
@@ -30,7 +31,14 @@ async function fixture() {
 const credit=(s:Scope,userId:string,event='credit',delta='100')=>db.transaction(tx=>postPoints(tx,{...s,userId,delta,source:'test',businessType:'test',businessId:event,idempotencyKey:event}));
 async function rule(s:Scope) {return one(db,`INSERT INTO redemption_rules(brand_id,bot_id,name,mode,points_cost,exchange_rate,enabled) VALUES($1,$2,'Test','fixed',10,1,true) RETURNING *`,[s.brandId,s.botId]);}
 async function start(botId:string,id:number,userId:number,text='/start') {return handleUpdate(db,botId,'test-secret',{update_id:id,message:{from:{id:userId,first_name:'Test',language_code:'es'},text}},()=> 'test-secret');}
-test('migration replay is safe',async()=>{await migrate(db);assert.equal((await db.query('SELECT * FROM schema_migrations')).rows.length,12);});
+test('migration replay is safe',async()=>{
+ const names=['001_core.sql','002_harden_ledger.sql','003_ledger_conflict_safety.sql','004_admin_sessions.sql','005_operations_queries.sql','006_dashboard.sql','007_mini_auth.sql','008_platform_identities.sql','009_platform_daily_facts.sql','010_platform_mapping_identity.sql','011_point_lots.sql','012_daily_entitlements.sql','013_member_growth.sql'];
+ const expected=await Promise.all(names.map(async name=>({name,checksum:createHash('sha256').update(await readFile(`db/migrations/${name}`)).digest('hex')})));
+ const before=(await db.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows;
+ assert.equal(before.length,13);assert.deepEqual(before,expected);
+ await migrate(db);
+ assert.deepEqual((await db.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows,expected);
+});
 test('duplicate updates process once, repeated starts preserve one identity',async()=>{
  const {s}=await fixture();const results=await Promise.all([start(s.botId,1,777),start(s.botId,1,777)]);
  assert.equal(results.filter(r=>r.duplicate).length,1);await start(s.botId,2,777);

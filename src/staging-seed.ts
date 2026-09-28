@@ -8,7 +8,7 @@ export class SeedError extends Error {
 export const seedBrand={name:'Staging Test Brand',slug:'staging-test-brand',default_language:'zh-CN',timezone:'UTC',status:'active',countries:[] as string[]};
 // Deliberately invalid as a real Telegram username (hyphens); internal synthetic label only.
 export const seedBot={name:'Staging Test Bot',username:'staging-test-bot-not-telegram',token_secret_ref:'STAGING_TEST_BOT_TOKEN_UNCONFIGURED',webhook_secret_ref:'STAGING_TEST_BOT_WEBHOOK_UNCONFIGURED',default_language:'zh-CN',supported_languages:['zh-CN'],timezone:null,status:'disabled'};
-const migrations=['001_core.sql','002_harden_ledger.sql','003_ledger_conflict_safety.sql','004_admin_sessions.sql','005_operations_queries.sql','006_dashboard.sql','007_mini_auth.sql','008_platform_identities.sql','009_platform_daily_facts.sql','010_platform_mapping_identity.sql','011_point_lots.sql','012_daily_entitlements.sql'];
+const migrations=['001_core.sql','002_harden_ledger.sql','003_ledger_conflict_safety.sql','004_admin_sessions.sql','005_operations_queries.sql','006_dashboard.sql','007_mini_auth.sql','008_platform_identities.sql','009_platform_daily_facts.sql','010_platform_mapping_identity.sql','011_point_lots.sql','012_daily_entitlements.sql','013_member_growth.sql'];
 export function seedMode(args:string[]):boolean {
  if(args.length===0 || (args.length===1 && args[0]==='--dry-run')) return false;
  if(args.length===1 && args[0]==='--apply') return true;
@@ -24,7 +24,7 @@ function matches(row:Record<string,unknown>,expected:Record<string,unknown>) {
 }
 export async function verifyMigrations(tx:Queryable) {
  const rows=(await tx.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows;
- if(rows.length!==migrations.length) throw new SeedError('migration_set_mismatch');
+ if(rows.length!==migrations.length || rows.some((row,index)=>row.name!==migrations[index])) throw new SeedError('migration_set_mismatch');
  for(const name of migrations) {
   const checksum=createHash('sha256').update(await readFile(`db/migrations/${name}`,'utf8')).digest('hex');
   if(!rows.some(row=>row.name===name && row.checksum===checksum)) throw new SeedError('migration_checksum_mismatch');
