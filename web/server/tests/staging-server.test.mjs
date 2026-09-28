@@ -43,7 +43,7 @@ before(async () => {
     const parts = []; for await (const chunk of req) parts.push(chunk);
     captured.push({ method: req.method, url: req.url, headers: req.headers, body: Buffer.concat(parts).toString() });
     if (req.url === '/v1/timeout') return;
-    if (req.url === '/v1/html-error') { res.writeHead(502, { 'content-type': 'text/html; sensitive=CANARY', 'x-proxy-request-id': 'CANARY' }); res.end('<html>upstream failure</html>'); return; }
+    if (req.url.startsWith('/v1/html-error')) { res.writeHead(Number(req.url.split('/')[3] || 502), { 'content-type': 'text/html; sensitive=CANARY', 'x-proxy-request-id': 'CANARY' }); res.end('<html>upstream failure</html>'); return; }
     if (req.url === '/v1/broken') { req.socket.destroy(); return; }
     if (req.url === '/v1/redirect') { res.writeHead(307, { location: 'https://example.invalid/never-follow' }); res.end(); return; }
     if (req.url === '/v1/cookies') {
@@ -215,7 +215,8 @@ test('diagnostics correlate start and completion without credentials, query or a
 test('upstream HTML error is distinguished from local proxy errors and cannot inject correlation', async () => {
   const response = await request('/v1/html-error');
   const end = diagnostics.at(-1);
-  assert.equal(response.status, 502); assert.equal(end.classification, 'upstream_http_error');
+  assert.equal(response.status, 502); assert.equal(end.classification, 'upstream_gateway_unavailable');
+  assert.match(response.headers['content-type'], /application\/json/); assert.equal(JSON.parse(response.body).error, 'upstream_gateway_unavailable');
   assert.equal(end.upstream_content_type, 'text/html'); assert.equal(end.upstream_status, 502);
   assert.equal(response.headers['x-proxy-request-id'], end.correlation_id);
   assert.doesNotMatch(JSON.stringify(end), /CANARY/);
@@ -249,4 +250,15 @@ test('diagnostics report socket reuse when keep-alive agent supplies a pooled so
     const ends = records.filter(r => r.phase === 'complete');
     assert.equal(ends[0].socket_reused, false); assert.equal(ends[1].socket_reused, true);
   } finally { await close(front); pooled.destroy(); }
+});
+
+for (const status of [502,503,504]) test(`gateway HTML ${status} is safe JSON; auth POST is never retried`, async () => {
+  const before=calls;
+  const response=await request('/v1/html-error/'+status,{method:'POST',body:'synthetic-auth-body'});
+  assert.equal(response.status,status);
+  assert.deepEqual(JSON.parse(response.body),{error:'upstream_gateway_unavailable'});
+  assert.match(response.headers['content-type'],/application\/json/);
+  assert.match(response.headers['x-proxy-request-id'],/^[a-f0-9-]{36}$/);
+  assert.equal(calls,before+1);
+  assert.ok(!response.body.includes('<html>'));
 });

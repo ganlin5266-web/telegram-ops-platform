@@ -333,6 +333,7 @@ export default function App() {
           <form
             onSubmit={async (e) => {
               e.preventDefault();
+              if (busy) return;
               setBusy(true);
               setError("");
               const submitted = password;
@@ -376,7 +377,7 @@ export default function App() {
           <small>仅限已授权管理员 · 安全会话认证</small>
           {error && (
             <button className="text" onClick={() => void initialize()}>
-              重新检查会话
+              重新连接（检查会话，不重复登录）
             </button>
           )}
         </main>

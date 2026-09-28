@@ -39,7 +39,7 @@ function apiError(res, status, code) {
 
 // Only fixed route labels enter logs; arbitrary path segments and all query data are omitted.
 const diagnosticPaths = new Set(['/v1', '/v1/', '/v1/me', '/v1/auth/login', '/v1/auth/logout',
-  '/v1/mini/me', '/v1/mini/auth/exchange', '/v1/mini/auth/logout']);
+  '/v1/mini/me', '/v1/mini/auth/exchange', '/v1/mini/auth/recover', '/v1/mini/auth/logout']);
 const networkCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN',
   'ECONNREFUSED', 'EPIPE', 'ERR_STREAM_PREMATURE_CLOSE', 'CERT_HAS_EXPIRED',
   'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'ERR_TLS_CERT_ALTNAME_INVALID']);
@@ -111,6 +111,15 @@ export async function createStagingServer({ dist = defaultDist, configPath = def
         state.upstream_headers_ms = elapsed();
         state.classification = incoming.statusCode >= 400 ? 'upstream_http_error' : 'upstream_response';
         incoming.once('end', () => { state.upstream_end_ms = elapsed(); });
+        // Render gateway HTML is not an application response. Keep original transport
+        // evidence in diagnostics, but expose only a safe code and correlation header.
+        if ([502, 503, 504].includes(incoming.statusCode) && state.upstream_content_type !== 'application/json') {
+          state.classification = 'upstream_gateway_unavailable';
+          incoming.on('error', () => {});
+          incoming.resume();
+          apiError(res, incoming.statusCode, 'upstream_gateway_unavailable');
+          return;
+        }
         const responseHeaders = cleanHeaders(incoming.headers);
         responseHeaders['x-proxy-request-id'] = correlationId;
         responseHeaders['cache-control'] = 'no-store';

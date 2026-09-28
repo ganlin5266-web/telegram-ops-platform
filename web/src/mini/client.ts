@@ -1,4 +1,5 @@
 export type Failure =
+  | "service_unavailable"
   | "network"
   | "timeout"
   | "invalid_json"
@@ -91,6 +92,9 @@ export function createClient(send: typeof fetch = fetch) {
           : "network",
       );
     }
+    // Classify gateway failures before JSON parsing; never expose HTML or retry a POST.
+    if ([502, 503, 504].includes(r.status))
+      throw new MiniError("service_unavailable", r.status);
     let json: any;
     try {
       if (!r.headers.get("content-type")?.includes("application/json"))

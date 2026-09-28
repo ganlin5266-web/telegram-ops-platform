@@ -7,6 +7,8 @@ export class ApiError extends Error {
   }
 }
 export function message(status: number, code = ""): string {
+  if ([502, 503, 504].includes(status) || code === "service_timeout")
+    return "服务暂时无法连接，可能正在启动。请稍候后重新连接";
   if (code === "entitlement_metric_semantics_unapproved")
     return "当前平台数据字段尚未通过资格规则语义校验";
   if (code === "insufficient_available_points") return "可用积分不足";
@@ -62,7 +64,7 @@ export async function request<T>(
     return response.status === 204 ? (undefined as T) : await response.json();
   } catch (error) {
     if (error instanceof ApiError) throw error;
-    throw new ApiError(0);
+    throw new ApiError(0, controller.signal.aborted ? "service_timeout" : "");
   } finally {
     clearTimeout(timer);
   }
