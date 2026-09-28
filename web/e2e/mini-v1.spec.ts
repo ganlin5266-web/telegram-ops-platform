@@ -49,6 +49,7 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
             botName: "P1 Test Bot",
             uiLanguage: "zh-CN",
           },
+          member: { enabled: false, available: false },
           points: { accountExists: false, balance: null },
           invitedCount: "0",
           redemptionCount: "0",
@@ -62,7 +63,17 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     page.getByRole("heading", { name: "你好，测试用户" }),
   ).toBeVisible();
   await expect(page.getByRole("navigation")).toHaveCSS("position", "fixed");
-  await expect(page.getByTestId("today-focus")).toContainText("等级即将开放");
+  const expectMemberGrowthDisabled = async () => {
+    const card = page.locator(".member-pass");
+    await expect(
+      card.getByRole("heading", { name: "会员成长尚未启用", exact: true }),
+    ).toBeVisible();
+    await expect(card).not.toContainText(/LV\s*\d+/);
+    await expect(card).not.toContainText(/\d+\s*Growth/);
+    await expect(card.locator(".pass-top")).toHaveCount(0);
+    await expect(card.getByRole("progressbar")).toHaveCount(0);
+  };
+  await expectMemberGrowthDisabled();
   await expect(page.getByTestId("today-focus")).not.toContainText(
     "暂无积分账户",
   );
@@ -115,6 +126,7 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     await expect(
       page.getByRole("heading", { name: tab, exact: true }),
     ).toBeVisible();
+    if (tab === "会员") await expectMemberGrowthDisabled();
     if (tab === "活动") {
       await expect(page.locator(".activity-card")).toHaveCount(4);
       await expect(
