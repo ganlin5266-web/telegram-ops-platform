@@ -758,28 +758,31 @@ describe(
       assert.equal(rows.rows.length, 0);
     });
     test("runtime grants permit independent Growth transactions and deny account/ledger/DDL mutation", async () => {
-      await db.query(
-        "DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='telegram_app') THEN CREATE ROLE telegram_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT; END IF; END $$",
-      );
-      await db.query("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
-      await db.query(
-        await readFile(
-          new URL("../db/runtime-grants.sql", import.meta.url),
-          "utf8",
-        ),
-      );
-      const f = await fixture();
-      const url = new URL(process.env.TEST_DATABASE_URL!);
-      url.username = "telegram_app";
+      // Dedicated test-only login: shared telegram_app may be absent, LOGIN or NOLOGIN.
+      // Never change its password/attributes or depend on another suite's role setup.
+      const sharedBefore = (await db.query(
+        "SELECT rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolbypassrls FROM pg_roles WHERE rolname='telegram_app'",
+      )).rows;
+      const role = "member_rt_" + randomUUID().replaceAll("-", "");
       const runtimePassword = randomUUID();
-      await db.query(`ALTER ROLE telegram_app PASSWORD '${runtimePassword}'`);
+      const url = new URL(process.env.TEST_DATABASE_URL!);
+      url.username = role;
       url.password = runtimePassword;
       const runtime = postgres(url.toString());
+      await db.query(
+        `CREATE ROLE ${role} LOGIN PASSWORD '${runtimePassword}' NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`,
+      );
       try {
-        assert.equal(
-          (await one(runtime, "SELECT current_user AS u")).u,
-          "telegram_app",
+        await db.query("REVOKE CREATE ON SCHEMA public FROM PUBLIC");
+        await db.query(
+          (await readFile(new URL("../db/runtime-grants.sql", import.meta.url), "utf8"))
+            .replaceAll("telegram_app", role),
         );
+        const f = await fixture();
+        assert.equal((await one(runtime, "SELECT current_user AS u")).u, role);
+        assert.deepEqual(await one(runtime,
+          "SELECT rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolbypassrls FROM pg_roles WHERE rolname=current_user"),
+          {rolcanlogin:true,rolsuper:false,rolcreatedb:false,rolcreaterole:false,rolbypassrls:false});
         await checkinGrowth(runtime, f.s, "runtime", now);
         assert.equal(await balance(f), "5");
         await assert.rejects(
@@ -788,6 +791,7 @@ describe(
             [f.m.id],
           ),
         );
+        await assert.rejects(runtime.query("UPDATE growth_ledger SET delta=1"));
         await assert.rejects(runtime.query("DELETE FROM growth_ledger"));
         await assert.rejects(runtime.query("TRUNCATE growth_ledger"));
         await assert.rejects(
@@ -822,7 +826,13 @@ describe(
         );
       } finally {
         await runtime.close();
+        await db.query(`DROP OWNED BY ${role}`);
+        await db.query(`DROP ROLE ${role}`);
       }
+      assert.deepEqual((await db.query(
+        "SELECT rolcanlogin,rolsuper,rolcreatedb,rolcreaterole,rolbypassrls FROM pg_roles WHERE rolname='telegram_app'",
+      )).rows, sharedBefore);
+      assert.equal((await one(db, "SELECT count(*)::int AS n FROM pg_roles WHERE rolname=$1", [role])).n, 0);
     });
     test("pending platform does not block confirmed daily checkin", async () => {
       const f = await fixture();
