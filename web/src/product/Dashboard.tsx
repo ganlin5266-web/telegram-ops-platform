@@ -1,3 +1,4 @@
+import {MemberMetrics} from './MemberMetrics';
 import { adminText } from "./i18n";
 import { useEffect, useState } from "react";
 import { useRemote } from "../operations/query";
@@ -105,6 +106,7 @@ export default function Dashboard({
     return <section className="panel">{adminText("message2")}</section>;
   return (
     <div className="product-dashboard">
+      {permissions.includes("growth.read") && <MemberMetrics brandId={base.split("/")[3]!} />}
       <section className="report-toolbar panel">
         <div className="segmented" aria-label={adminText("message3")}>
           {(

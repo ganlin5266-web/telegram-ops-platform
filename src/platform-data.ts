@@ -1,3 +1,4 @@
+import {queueGrowthSourceChange} from './member-task-queue.js';
 import {enqueueEntitlementSourceChange} from './entitlements.js';
 import {
   adapterDefinition,
@@ -264,7 +265,7 @@ export async function preflightImport(
           "SELECT user_id,bot_id FROM platform_identities WHERE brand_id=$1 AND platform_id=$2 AND platform_uid=$3 AND status='verified'",
           [s.brandId,v.platformId,row.normalized.uid],
         )).rows[0];
-        if (bound) await enqueueEntitlementSourceChange(tx,s.brandId,v.platformId,"data_conflict",batch.id,v.businessDate,bound.user_id,bound.bot_id);
+        if (bound) { await enqueueEntitlementSourceChange(tx,s.brandId,v.platformId,"data_conflict",batch.id,v.businessDate,bound.user_id,bound.bot_id); await queueGrowthSourceChange(tx,s.brandId,v.platformId,`conflict:${batch.id}`,v.businessDate,bound.user_id,bound.bot_id); }
       }
     }
     await audit(tx, p, s, "platform_data.upload", batch.id, requestId);
@@ -385,7 +386,7 @@ export async function activateImport(
         "UPDATE platform_user_daily_facts SET current_revision_id=$2 WHERE id=$1",
         [fact.id, r.id],
       );
-      if(identity) await enqueueEntitlementSourceChange(tx,s.brandId,batch.platform_id,'fact_revision',r.id,String(batch.business_date).slice(0,10),identity.user_id,identity.bot_id);
+      if(identity) { await enqueueEntitlementSourceChange(tx,s.brandId,batch.platform_id,'fact_revision',r.id,String(batch.business_date).slice(0,10),identity.user_id,identity.bot_id); await queueGrowthSourceChange(tx,s.brandId,batch.platform_id,`fact:${r.id}`,String(batch.business_date).slice(0,10),identity.user_id,identity.bot_id); }
       if (current) oldBatches.add(current.batch_id);
       revisions++;
     }

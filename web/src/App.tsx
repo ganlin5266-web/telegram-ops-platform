@@ -1,3 +1,4 @@
+import {MemberAdmin} from './product/MemberAdmin';
 import Dashboard from "./product/Dashboard";
 import {
   ProductSpace,
@@ -630,7 +631,7 @@ export default function App() {
           ) : page === "membership" ||
             page === "activities" ||
             page === "games" ? (
-            <ProductSpace kind={page} />
+            page === 'membership' ? <MemberAdmin brandId={brand} csrf={me.csrfToken} /> : <ProductSpace kind={page} />
           ) : page === "settings" ? (
             <>
               <section className="panel">
@@ -792,7 +793,7 @@ export default function App() {
               <span>当前积分余额</span>
               <strong>{pointBusy ? "读取中…" : (balance ?? "暂无数据")}</strong>
             </div>
-            <UserMembership />
+            <UserMembership base={base} userId={selected.id} onExpire={expire} />
             {permissions.includes("platform_identities.read") && (
               <UserPlatforms
                 key={`platforms:${base}/${selected.id}`}

@@ -1,3 +1,4 @@
+import {attachMiniMembers} from './member-routes.js';
 import {attachMiniPlatforms} from './platform-routes.js';
 import {recoverMini,recoveryCookie,readRecoveryCookie,requireRecoveryProtection} from './mini-recovery.js';
 import {verifyInitData} from './telegram-init-data.js';
@@ -69,6 +70,7 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
   catch(error) {reply.header('Set-Cookie',recoveryCookie('',0));throw error;}
  });
  attachMiniQueries(app,db,config.bindings);
+ attachMiniMembers(app,db,config.bindings);
  attachMiniPlatforms(app,db,config.bindings);
  app.get('/me',async req=>{
   empty.parse(req.query);

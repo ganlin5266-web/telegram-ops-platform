@@ -239,3 +239,13 @@ export function periodRange(day: string, period: Period, zone: string) {
     to: midnight(d.toISOString().slice(0, 10), zone),
   };
 }
+
+// Brand Member metrics use the member timezone and whole-period server aggregates.
+export const memberMetrics = [
+  {key:'members',name:'会员人数',aggregation:'SNAPSHOT',source:'member_level_history',scope:'brand'},
+  {key:'distribution',name:'等级分布',aggregation:'SNAPSHOT',source:'member_level_history',scope:'brand'},
+  {key:'issued',name:'Growth 发放',aggregation:'SUM',source:'growth_ledger.kind=grant',scope:'brand'},
+  {key:'net',name:'Growth 净变化',aggregation:'SUM',source:'growth_ledger.delta',scope:'brand'},
+  {key:'earners',name:'Growth 获得人数',aggregation:'DISTINCT',source:'positive non-admin ledger member_id',scope:'brand'},
+  {key:'upgrades',name:'升级人数',aggregation:'DISTINCT',source:'member_level_history upgrades',scope:'brand'},
+] as const;

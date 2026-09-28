@@ -48,7 +48,7 @@ describe("Mini product presentation", () => {
   it("empty/new member sees a clear next action, never a giant missing-account card", async () => {
     await open();
     expect(screen.getByTestId("today-focus").textContent).toContain(
-      "等级即将开放",
+      "会员成长尚未启用",
     );
     expect(screen.queryByText("暂无积分账户")).toBeNull();
     expect(

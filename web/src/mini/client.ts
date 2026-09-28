@@ -19,7 +19,9 @@ export class MiniError extends Error {
     super(kind);
   }
 }
+export type MemberSummary = {enabled:boolean;available:boolean;level?:number;levelName?:string;growth?:string;progress?:number;nextThreshold?:string|null;protected?:boolean;todayGrowth?:string;dailyCap?:number};
 export type Home = {
+  member?:MemberSummary;
   profile: {
     displayName: string;
     projectName: string;
@@ -181,6 +183,8 @@ export function createClient(send: typeof fetch = fetch) {
         "X-Mini-CSRF": "1",
         "Idempotency-Key": key,
       }) as Promise<PlatformIdentity>,
+    memberHistory: (after?:string) => call('/member/growth'+(after?'?after='+encodeURIComponent(after):'')),
+    memberCheckin: () => call('/member/checkin','POST',{}),
     home: () => call("/home") as Promise<Home>,
     page: (
       kind: "point-ledger" | "referrals" | "redemptions",

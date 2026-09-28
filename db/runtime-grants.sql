@@ -42,3 +42,12 @@ GRANT UPDATE(status,published_at,published_by,retired_at) ON entitlement_rule_ve
 GRANT UPDATE(current_revision_id) ON daily_entitlements TO telegram_app;
 GRANT UPDATE(status,attempts,next_attempt_at,lease_until,lease_token,last_error_code,outcome,completed_at) ON entitlement_evaluation_tasks TO telegram_app;
 GRANT UPDATE(resolved_at) ON entitlement_sla_findings TO telegram_app;
+
+-- Batch A Member / Growth: immutable evidence append only, derived balance trigger only.
+GRANT SELECT,INSERT ON members,member_user_links,growth_accounts,member_rule_versions,growth_sources,growth_evaluation_revisions,growth_daily_reconciliations,growth_ledger,member_level_history,growth_evaluation_tasks TO telegram_app;
+GRANT UPDATE(level,level_rule_id) ON members TO telegram_app;
+GRANT UPDATE(status,published_at,published_by) ON member_rule_versions TO telegram_app;
+GRANT UPDATE(current_evaluation_id) ON growth_sources TO telegram_app;
+GRANT UPDATE(status,attempts,next_attempt_at,lease_until,lease_token,last_error_code,completed_at) ON growth_evaluation_tasks TO telegram_app;
+
+GRANT UPDATE(member_id) ON growth_accounts TO telegram_app; -- row lock only; identity trigger prevents changes

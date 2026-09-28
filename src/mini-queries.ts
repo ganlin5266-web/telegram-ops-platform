@@ -1,3 +1,4 @@
+import {miniMemberSummary} from './member-growth.js';
 import {pointSummary,lotsEnabled} from './point-lots.js';
 import type {FastifyInstance} from 'fastify';
 import {z} from 'zod';
@@ -20,7 +21,7 @@ export function attachMiniQueries(app:FastifyInstance,db:Database,bindings:MiniA
    WHERE u.brand_id=$1 AND u.bot_id=$2 AND u.id=$3`,[p.brandId,p.botId,p.userId]);
   const totals=await one(db,`SELECT (SELECT count(*)::text FROM referrals WHERE brand_id=$1 AND bot_id=$2 AND inviter_id=$3) AS invited,
    (SELECT count(*)::text FROM redemptions WHERE brand_id=$1 AND bot_id=$2 AND user_id=$3) AS redemptions`,[p.brandId,p.botId,p.userId]);
-  return {profile:{displayName:[profile.first_name,profile.last_name].filter(Boolean).join(' ')||'',projectName:profile.project_name,botName:profile.bot_name,uiLanguage:'zh-CN',preferredLanguage:profile.preferred_language,botLanguage:profile.bot_language,projectLanguage:profile.project_language,telegramLanguage:profile.telegram_language_code},points:await points(p),invitedCount:totals.invited,redemptionCount:totals.redemptions,activities:activities()};
+  return {member:await miniMemberSummary(db,p),profile:{displayName:[profile.first_name,profile.last_name].filter(Boolean).join(' ')||'',projectName:profile.project_name,botName:profile.bot_name,uiLanguage:'zh-CN',preferredLanguage:profile.preferred_language,botLanguage:profile.bot_language,projectLanguage:profile.project_language,telegramLanguage:profile.telegram_language_code},points:await points(p),invitedCount:totals.invited,redemptionCount:totals.redemptions,activities:activities()};
  });
  app.get('/points',async req=>{noQuery.parse(req.query);return points(await auth(req));});
  app.get('/activities',async req=>{noQuery.parse(req.query);await auth(req);return activities();});

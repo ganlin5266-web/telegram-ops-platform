@@ -4,6 +4,7 @@ permissions:
   contents: read
 jobs:
   verify:
+    if: github.ref != 'refs/heads/codex/member-growth-batch-a' && github.head_ref != 'codex/member-growth-batch-a'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:

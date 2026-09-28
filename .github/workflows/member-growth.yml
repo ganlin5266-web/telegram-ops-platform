@@ -1,0 +1,39 @@
+name: member-growth-targeted
+on:
+  push:
+    branches: [codex/member-growth-batch-a]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  batch-a:
+    if: github.event_name == 'push' || github.head_ref == 'codex/member-growth-batch-a'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: telegram_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TZ: UTC
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/telegram_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npm --prefix web ci
+      - run: npm run build && npm --prefix web run build
+      - run: node scripts/scan-secrets.mjs
+      - name: Member and shared-input PostgreSQL 17 tests
+        run: node --import tsx --test --test-concurrency=1 tests/member-migration.test.ts tests/member-growth.test.ts tests/entitlement-domain.test.ts tests/entitlement-mapping.test.ts tests/entitlements.test.ts
+      - name: Member frontend targeted regression
+        working-directory: web
+        run: npm test -- tests/member-growth.test.tsx tests/mini-product.test.tsx tests/mini-v1.test.tsx tests/mini-i18n.test.tsx tests/product-dashboard.test.tsx

@@ -48,26 +48,9 @@ export function ProductSpace({
     </div>
   );
 }
-export function UserMembership() {
-  return (
-    <section className="panel">
-      <h3>{adminText("message57")}</h3>
-      <div className="cards">
-        {[
-          adminText("message58"),
-          "Growth",
-          adminText("message59"),
-          adminText("message60"),
-          adminText("message61"),
-        ].map((s) => (
-          <div key={s}>
-            <small>{s}</small>
-            <p>{adminText("message28")}</p>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
+export function UserMembership({base,userId,onExpire}:{base:string;userId:string;onExpire:()=>void}) {
+ const member=useRemote<{available:boolean;level:number;growth:string}>(`${base}/users/${userId}/member`,0,onExpire);
+ return <section className="panel"><h3>会员</h3>{member.data?.available?<div className="cards"><p>LV{member.data.level}</p><p>{member.data.growth} Growth</p></div>:<p>会员数据尚未接入或暂无读取权限</p>}</section>;
 }
 
 export function AuditDisclosure({

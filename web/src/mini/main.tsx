@@ -1,3 +1,4 @@
+import {MemberCard} from './MemberCard';
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createClient, MiniError, type Home, type Page } from "./client";
@@ -281,22 +282,7 @@ export function MiniApp() {
           </div>
           {tab === "home" && (
             <>
-              <section className="member-pass" data-testid="today-focus">
-                <div className="pass-top">
-                  <span>{t("level")}</span>
-                  <span aria-hidden="true">✧</span>
-                </div>
-                <h2>{t("levelPending")}</h2>
-                <div className="pass-growth">
-                  <span>{t("growth")}</span>
-                  <strong>—</strong>
-                </div>
-                <div className="growth-track" aria-label={t("notConnected")} />
-                <p>{t("growthPending")}</p>
-                <button onClick={() => select("membership")}>
-                  {t("membership")} <span aria-hidden="true">→</span>
-                </button>
-              </section>
+              <div data-testid="today-focus"><MemberCard member={home.member} locale={locale}/><button onClick={()=>select("membership")}>{t("membership")} <span aria-hidden="true">→</span></button></div>
               <h2 className="section-title">{t("summary")}</h2>
               <div className="summary">
                 <button onClick={() => select("rewards")}>
@@ -356,19 +342,7 @@ export function MiniApp() {
           )}
           {tab === "membership" && (
             <>
-              <section className="member-pass">
-                <div className="pass-top">
-                  <span>{t("level")}</span>
-                  <span aria-hidden="true">✧</span>
-                </div>
-                <h2>{t("levelPending")}</h2>
-                <div className="pass-growth">
-                  <span>{t("growth")}</span>
-                  <strong>—</strong>
-                </div>
-                <div className="growth-track" aria-label={t("notConnected")} />
-                <p>{t("growthPending")}</p>
-              </section>
+              <MemberCard member={home.member} locale={locale} history={client.memberHistory} checkin={client.memberCheckin} onUpdated={async()=>setHome(await client.home())}/>
               <section className="card">
                 <h2>{t("nextLevel")}</h2>
                 <p>{t("notConnected")}</p>

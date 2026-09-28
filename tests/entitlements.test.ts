@@ -1,3 +1,4 @@
+import {dateInZone} from "../src/entitlement-domain.js";
 import { normalizeRow, stable, digest } from "../src/platform-data-input.js";
 import { resolveMappingSemantics } from "../src/entitlement-mapping.js";
 import { test, before, after } from "node:test";
@@ -992,7 +993,8 @@ test("P5B historical incomplete mapping remains pending during evaluation", asyn
 });
 
 
-test("P4 unresolved comparison evidence blocks only its account/date and resolves through activation", async () => {
+test("P4 unresolved comparison evidence blocks only its account/date and resolves through activation", async (t) => {
+  t.mock.timers.enable({apis:["Date"],now:new Date("2026-09-27T12:00:00Z")});
   const f = await fixture("110");
   await f.publish();
   process.env.DAILY_ENTITLEMENTS_ENABLED = "true";
@@ -1017,7 +1019,7 @@ test("P4 unresolved comparison evidence blocks only its account/date and resolve
   const conflict = await pre("600");
   assert.equal(conflict.status,"review_required");
   const queued = await db.query("SELECT * FROM entitlement_evaluation_tasks WHERE brand_id=$1 AND trigger_reason='data_conflict'",[f.s.brandId]);
-  assert.ok(queued.rows.some(r => String(r.entitlement_date).startsWith("2026-09-27") || new Date(r.entitlement_date).toISOString().startsWith("2026-09-27")));
+  assert.ok(queued.rows.some(r => dateInZone(new Date(r.entitlement_date),process.env.TZ??"UTC")==="2026-09-27"));
   const p4Snapshot = async () => (await db.query("SELECT b.*,e.id AS evidence_id,e.normalized,e.issues AS row_issues FROM platform_import_batches b JOIN platform_import_evidence e ON e.batch_id=b.id WHERE b.id=$1",[conflict.id])).rows;
   const beforeP4 = await p4Snapshot();
   const blocked = await evaluateEntitlement(db,f.t,"test","conflict-test");
@@ -1046,7 +1048,8 @@ test("P4 unresolved comparison evidence blocks only its account/date and resolve
   assert.deepEqual(await baseline(),beforeBusiness);
 });
 
-test("P4 conflict row does not contaminate unchanged verified users or another Bot in the same batch", async () => {
+test("P4 conflict row does not contaminate unchanged verified users or another Bot in the same batch", async (t) => {
+  t.mock.timers.enable({apis:["Date"],now:new Date("2026-09-27T12:00:00Z")});
   const f = await fixture("110");
   const bot = await one(db,"INSERT INTO telegram_bots(brand_id,name,username,token_secret_ref,webhook_secret_ref,default_language,supported_languages,status) VALUES($1,'TEST',$2,$2,$2,'en',ARRAY['en'],'disabled') RETURNING id",[f.s.brandId,randomUUID()]);
   const targets = [];
