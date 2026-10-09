@@ -38,6 +38,11 @@ import {
 } from "../src/member-growth.js";
 import { readFile } from "node:fs/promises";
 import { createApp } from "../src/app.js";
+import {
+  calendarDay,
+  dateInZone,
+  wallInstant,
+} from "../src/entitlement-domain.js";
 describe(
   "Member Growth PostgreSQL 17",
   { skip: !process.env.TEST_DATABASE_URL },
@@ -103,7 +108,7 @@ describe(
         {
           kind: "growth",
           effectiveFrom: "2026-10-01",
-          effectiveUntil: "2026-12-31",
+          effectiveUntil: "2099-12-31",
           config: defaultGrowth("America/Sao_Paulo"),
         },
         "test",
@@ -116,7 +121,7 @@ describe(
         {
           kind: "level",
           effectiveFrom: "2026-10-01",
-          effectiveUntil: "2026-12-31",
+          effectiveUntil: "2099-12-31",
           config: DEFAULT_LEVELS,
         },
         "test",
@@ -585,6 +590,15 @@ describe(
 
     async function platformFixture() {
       const f = await fixture();
+      // Identity verification uses the real database clock. Keep this source
+      // date after that instant so the fixture continues to exercise the
+      // no-historical-attribution rule after its original 2026 test window.
+      const timezone = "America/Sao_Paulo",
+        sourceDate = calendarDay(dateInZone(new Date(), timezone), 1),
+        entitlementDate = calendarDay(sourceDate, 1),
+        platformNow = new Date(
+          wallInstant(entitlementDate, "12:00", timezone),
+        );
       const platform = await createPlatform(
         db,
         f.p,
@@ -593,7 +607,7 @@ describe(
           code: "MEMBER_TEST",
           displayName: "STAGING SYNTHETIC",
           market: "BR",
-          timezone: "America/Sao_Paulo",
+          timezone,
           currency: "BRL",
           verificationMethod: "manual_admin",
           uidFormat: "alphanumeric",
@@ -631,8 +645,8 @@ describe(
           f.s,
           {
             platformId: platform.id,
-            businessDate: "2026-10-01",
-            timezone: "America/Sao_Paulo",
+            businessDate: sourceDate,
+            timezone,
             currency: "BRL",
             sourceType: "csv",
             filename: "STAGING-TEST.csv",
@@ -660,11 +674,11 @@ describe(
         {
           kind: "platform",
           platformId: platform.id,
-          effectiveFrom: "2026-10-02",
-          effectiveUntil: "2026-12-31",
+          effectiveFrom: entitlementDate,
+          effectiveUntil: "2099-12-31",
           config: {
             currency: "BRL",
-            timezone: "America/Sao_Paulo",
+            timezone,
             metric: "deposit_amount",
             tiers: DEFAULT_TIERS,
             mappingBatchId: batch,
@@ -676,22 +690,22 @@ describe(
       const target = {
         ...f.s,
         platformId: platform.id,
-        sourceDate: "2026-10-01",
+        sourceDate,
       };
-      return { ...f, platform, upload, target };
+      return { ...f, platform, upload, target, platformNow };
     }
     test("real P4 canonical fact and revision feed independent Growth; conflict and resolution", async () => {
       const f = await platformFixture();
-      await evaluatePlatformGrowth(db, f.target, "test", now);
+      await evaluatePlatformGrowth(db, f.target, "test", f.platformNow);
       assert.equal(await balance(f), "40");
       await f.upload("600", "complete", true);
-      await evaluatePlatformGrowth(db, f.target, "test", now);
+      await evaluatePlatformGrowth(db, f.target, "test", f.platformNow);
       assert.equal(await balance(f), "100");
       await f.upload("50", "complete", true);
-      await evaluatePlatformGrowth(db, f.target, "test", now);
+      await evaluatePlatformGrowth(db, f.target, "test", f.platformNow);
       assert.equal(await balance(f), "20");
       const conflict = await f.upload("700", "complete", false, false);
-      await evaluatePlatformGrowth(db, f.target, "test", now);
+      await evaluatePlatformGrowth(db, f.target, "test", f.platformNow);
       const e = await one(
         db,
         "SELECT e.status FROM growth_sources s JOIN growth_evaluation_revisions e ON e.id=s.current_evaluation_id WHERE s.member_id=$1",
@@ -700,7 +714,7 @@ describe(
       assert.equal(e.status, "review_required");
       assert.equal(await balance(f), "20");
       await activateImport(db, f.p, f.s, conflict, true, "test");
-      await evaluatePlatformGrowth(db, f.target, "test", now);
+      await evaluatePlatformGrowth(db, f.target, "test", f.platformNow);
       assert.equal(await balance(f), "100");
       assert.equal(
         (
@@ -716,7 +730,7 @@ describe(
     test("real P4 null and incomplete pending, explicit zero not applicable", async () => {
       const f = await platformFixture();
       await f.upload("", "complete", true);
-      await evaluatePlatformGrowth(db, f.target, "test", now);
+      await evaluatePlatformGrowth(db, f.target, "test", f.platformNow);
       let e = await one(
         db,
         "SELECT e.status FROM growth_sources s JOIN growth_evaluation_revisions e ON e.id=s.current_evaluation_id WHERE s.member_id=$1",
@@ -724,7 +738,7 @@ describe(
       );
       assert.equal(e.status, "pending");
       await f.upload("0", "complete", true);
-      await evaluatePlatformGrowth(db, f.target, "test", now);
+      await evaluatePlatformGrowth(db, f.target, "test", f.platformNow);
       e = await one(
         db,
         "SELECT e.status FROM growth_sources s JOIN growth_evaluation_revisions e ON e.id=s.current_evaluation_id WHERE s.member_id=$1",
@@ -733,7 +747,7 @@ describe(
       assert.equal(e.status, "not_applicable");
       assert.equal(await balance(f), "0");
       await f.upload("101", "incomplete", true);
-      await evaluatePlatformGrowth(db, f.target, "test", now);
+      await evaluatePlatformGrowth(db, f.target, "test", f.platformNow);
       e = await one(
         db,
         "SELECT e.status FROM growth_sources s JOIN growth_evaluation_revisions e ON e.id=s.current_evaluation_id WHERE s.member_id=$1",
@@ -744,11 +758,11 @@ describe(
     test("persisted task catch-up re-reads latest fact; duplicate scheduling and workers", async () => {
       const f = await platformFixture();
       await f.upload("600", "complete", true);
-      await scheduleGrowthTasks(db, new Date("2026-10-03T15:00:00Z"));
-      await scheduleGrowthTasks(db, new Date("2026-10-03T15:00:00Z"));
+      await scheduleGrowthTasks(db, f.platformNow);
+      await scheduleGrowthTasks(db, f.platformNow);
       await Promise.all([
-        runGrowthTasks(db, 100, now),
-        runGrowthTasks(db, 100, now),
+        runGrowthTasks(db, 100, f.platformNow),
+        runGrowthTasks(db, 100, f.platformNow),
       ]);
       assert.equal(await balance(f), "100");
       const rows = await db.query(
@@ -810,8 +824,8 @@ describe(
           f.s.brandId,
           {
             kind: "level",
-            effectiveFrom: "2027-01-01",
-            effectiveUntil: "2027-12-31",
+            effectiveFrom: "2100-01-01",
+            effectiveUntil: "2100-12-31",
             config: DEFAULT_LEVELS,
           },
           "runtime",
