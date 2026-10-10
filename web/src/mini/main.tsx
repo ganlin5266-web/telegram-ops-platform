@@ -1,4 +1,5 @@
-import {MemberCard} from './MemberCard';
+import { MemberCard } from "./MemberCard";
+import { Icon } from "./icons";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createClient, MiniError, type Home, type Page } from "./client";
@@ -17,18 +18,24 @@ import {
   type Key,
 } from "./i18n";
 import PlatformAccounts from "./PlatformAccounts";
+import {
+  CheckinPanel,
+  DailyDone,
+  BackendPrimary,
+  GrowthWays,
+  InviteJourney,
+  checkinState,
+  isKnownPrimary,
+  nearLevelUp,
+} from "./retention";
 import "./style.css";
 const tabs = ["home", "membership", "activities", "games", "me"] as const;
 type Tab = (typeof tabs)[number] | "rewards" | "invite";
 type Kind = "point-ledger" | "referrals" | "redemptions";
-const templates = [
-  ["newcomer", "✧", "newcomerBody"],
-  ["daily", "☀", "dailyBody"],
-  ["free", "◇", "freeBody"],
-  ["friends", "↗", "inviteBody"],
-] as const;
-export function MiniApp() {
-  const client = useRef(createClient()).current;
+export function MiniApp({
+  client: injected,
+}: { client?: ReturnType<typeof createClient> } = {}) {
+  const client = useRef(injected ?? createClient()).current;
   const [tab, setTab] = useState<Tab>("home"),
     [home, setHome] = useState<Home>(),
     [busy, setBusy] = useState(false),
@@ -39,6 +46,7 @@ export function MiniApp() {
     [panel, setPanel] = useState<
       "games" | "language" | "help" | "platformAccount" | null
     >(null),
+    [platformVerified, setPlatformVerified] = useState<boolean>(),
     [device, setDevice] = useState<Locale | undefined>(() =>
       readPreference(miniBrand.appKey),
     );
@@ -108,6 +116,15 @@ export function MiniApp() {
     setPage(undefined);
     setError(undefined);
     setPanel(null);
+    if (next === "membership" && platformVerified === undefined)
+      void client
+        .platforms?.()
+        .then((r) =>
+          setPlatformVerified(
+            r.items.some((p) => p.identity?.status === "verified"),
+          ),
+        )
+        .catch(() => {});
     if (next === "rewards" || next === "invite") {
       const history = k ?? (next === "invite" ? "referrals" : "point-ledger");
       setKind(history);
@@ -208,27 +225,20 @@ export function MiniApp() {
       )}
     </section>
   );
-  const catalogue = (
-    <div className="activity-grid">
-      {templates.map(([key, icon, body]) => (
-        <article className="card activity-card" key={key}>
-          <div className="card-top">
-            <span className="tile-icon" aria-hidden="true">
-              {icon}
-            </span>
-            <span className="badge">{t("soon")}</span>
-          </div>
-          <h2>{t(key)}</h2>
-          <p className="muted">{t(body)}</p>
-          <small>{t("schedule")}</small>
-          <button disabled className="coming-button">
-            {t("upcoming")}
-          </button>
-        </article>
-      ))}
-    </div>
-  );
   const balance = formatPoints(home?.points.balance, locale);
+  const memberOn = !!(home?.member?.enabled && home.member.available);
+  const refreshHome = async () => {
+    const h = await client.home();
+    setHome(h);
+    return h;
+  };
+  const near = memberOn && nearLevelUp(home?.member);
+  const goEarn = () => select("membership");
+  const go = (to: string) => (to === "bind" ? openBind() : select(to as Tab));
+  const openBind = () => {
+    select("me");
+    setPanel("platformAccount");
+  };
   return (
     <div className={`mini-shell theme-${miniBrand.theme}`}>
       <header>
@@ -249,6 +259,9 @@ export function MiniApp() {
       </header>
       {!home || out ? (
         <main>
+          {!home && !out && busy && (
+            <div className="home-skeleton" aria-hidden="true" />
+          )}
           <section className="hero">
             <p className="eyebrow">{t("space")}</p>
             <h1>
@@ -282,91 +295,151 @@ export function MiniApp() {
           </div>
           {tab === "home" && (
             <>
-              <div data-testid="today-focus"><MemberCard member={home.member} locale={locale}/><button onClick={()=>select("membership")}>{t("membership")} <span aria-hidden="true">→</span></button></div>
-              <h2 className="section-title">{t("summary")}</h2>
-              <div className="summary">
+              <div data-testid="today-focus">
+                <MemberCard
+                  member={home.member}
+                  locale={locale}
+                  onEarn={near ? goEarn : undefined}
+                />
+                <button
+                  className="text-button card-link"
+                  onClick={() => select("membership")}
+                >
+                  {t("membership")} <span aria-hidden="true">→</span>
+                </button>
+              </div>
+              <h2 className="section-title">{t("todayActions")}</h2>
+              {isKnownPrimary(home.primaryAction) ? (
+                <BackendPrimary t={t} action={home.primaryAction} go={go} />
+              ) : !memberOn ? (
+                <div className="primary-action">
+                  <div>
+                    <strong>{t("actionBind")}</strong>
+                    <small>{t("actionBindBody")}</small>
+                  </div>
+                  <button onClick={openBind}>{t("bindCta")}</button>
+                </div>
+              ) : (
+                <CheckinPanel
+                  doneView={<DailyDone t={t} go={go} />}
+                  t={t}
+                  member={home.member}
+                  checkin={client.memberCheckin}
+                  refresh={refreshHome}
+                  onInvite={() => select("invite")}
+                  onBenefits={() => select("membership")}
+                />
+              )}
+              <section className="points-strip" aria-label={t("points")}>
+                <div>
+                  <small>{t("points")}</small>
+                  <strong>
+                    {balance} <span>{t("pointsUnit")}</span>
+                  </strong>
+                  {home.points.expiringSoon &&
+                    home.points.expiringSoon !== "0" && (
+                      <em>
+                        {t("pointsExpiring", {
+                          amount: formatPoints(
+                            home.points.expiringSoon,
+                            locale,
+                          ),
+                        })}
+                      </em>
+                    )}
+                </div>
                 <button onClick={() => select("rewards")}>
-                  <strong>{balance}</strong>
-                  <span>{t("points")}</span>
+                  {t("rewardCentre")}
                 </button>
+              </section>
+              <div className="secondary-actions">
                 <button onClick={() => select("invite")}>
-                  <strong>{formatPoints(home.invitedCount, locale)}</strong>
-                  <span>{t("friends")}</span>
+                  <span className="tile-icon">
+                    <Icon name="users" />
+                  </span>
+                  <span>
+                    <strong>{t("actionInvite")}</strong>
+                    <small>{t("inviteActionBody")}</small>
+                  </span>
+                  <span className="go">{t("inviteCta")}</span>
                 </button>
-                <button onClick={() => select("rewards", "redemptions")}>
-                  <strong>{formatPoints(home.redemptionCount, locale)}</strong>
-                  <span>{t("myRedeem")}</span>
-                </button>
-              </div>
-              <h2 className="section-title">{t("todayBenefits")}</h2>
-              <div className="benefit-strip">
-                {(
-                  ["gameChances", "dailyReward", "memberActivity"] as const
-                ).map((k) => (
-                  <div key={k}>
-                    <span>{t(k)}</span>
-                    <small>{t("soon")}</small>
-                  </div>
-                ))}
-              </div>
-              <h2 className="section-title">{t("quick")}</h2>
-              <div className="quick-grid">
-                {(
-                  [
-                    ["activityCentre", "activities", "✦"],
-                    ["rewardCentre", "rewards", "◇"],
-                    ["games", "games", "▧"],
-                    ["friends", "invite", "↗"],
-                  ] as const
-                ).map(([label, target, icon]) => (
-                  <button key={label} onClick={() => select(target)}>
-                    <span className="tile-icon" aria-hidden="true">
-                      {icon}
+                {memberOn ? (
+                  <button onClick={openBind}>
+                    <span className="tile-icon">
+                      <Icon name="link" />
                     </span>
-                    <strong>{t(label)}</strong>
-                    {target === "games" && <small>{t("soon")}</small>}
+                    <span>
+                      <strong>{t("actionBind")}</strong>
+                      <small>{t("actionBindBody")}</small>
+                    </span>
+                    <span className="go">
+                      <Icon name="arrow" />
+                    </span>
                   </button>
-                ))}
+                ) : (
+                  <button onClick={() => select("membership")}>
+                    <span className="tile-icon">
+                      <Icon name="growth" />
+                    </span>
+                    <span>
+                      <strong>{t("growthWays")}</strong>
+                      <small>{t("growthWaysBody")}</small>
+                    </span>
+                    <span className="go">
+                      <Icon name="arrow" />
+                    </span>
+                  </button>
+                )}
               </div>
-              <h2 className="section-title">{t("recommend")}</h2>
-              <div className="recommend">
-                {templates.slice(0, 3).map(([key, icon]) => (
-                  <div key={key}>
-                    <span aria-hidden="true">{icon}</span>
-                    <strong>{t(key)}</strong>
-                    <small>{t("soon")}</small>
-                  </div>
-                ))}
-              </div>
+              <p className="aside-note">{t("growthDifference")}</p>
             </>
           )}
           {tab === "membership" && (
             <>
-              <MemberCard member={home.member} locale={locale} history={client.memberHistory} checkin={client.memberCheckin} onUpdated={async()=>setHome(await client.home())}/>
-              <section className="card">
-                <h2>{t("nextLevel")}</h2>
-                <p>{t("notConnected")}</p>
-                <p className="muted">{t("growthDifference")}</p>
+              <MemberCard
+                member={home.member}
+                locale={locale}
+                history={client.memberHistory}
+              />
+              {memberOn && (
+                <CheckinPanel
+                  t={t}
+                  member={home.member}
+                  checkin={client.memberCheckin}
+                  refresh={refreshHome}
+                  onInvite={() => select("invite")}
+                  onBenefits={() => select("membership")}
+                />
+              )}
+              <h2 className="section-title">{t("growthWays")}</h2>
+              <GrowthWays
+                t={t}
+                member={home.member}
+                memberOn={memberOn}
+                platformVerified={platformVerified}
+                onCheckin={() =>
+                  window.scrollTo?.({ top: 0, behavior: "smooth" })
+                }
+                onInvite={() => select("invite")}
+                onBind={openBind}
+              />
+              <section className="card compact-list">
+                <div className="placeholder-row">
+                  <span>{t("currentBenefits")}</span>
+                  <small>{t("soon")}</small>
+                </div>
+                <div className="placeholder-row">
+                  <span>
+                    {memberOn && home.member?.nextThreshold
+                      ? t("levelBenefits", {
+                          level: String((home.member.level ?? 0) + 1),
+                        })
+                      : t("nextBenefits")}
+                  </span>
+                  <small>{t("soon")}</small>
+                </div>
               </section>
-              <section className="card">
-                <h2>{t("benefits")}</h2>
-                {(
-                  ["gameChances", "dailyReward", "memberActivity"] as const
-                ).map((k) => (
-                  <div className="placeholder-row" key={k}>
-                    <span>{t(k)}</span>
-                    <small>{t("soon")}</small>
-                  </div>
-                ))}
-              </section>
-              <section className="card">
-                <h2>{t("unlockBenefits")}</h2>
-                <p className="muted">{t("memberPending")}</p>
-                <details>
-                  <summary>{t("memberExplanation")}</summary>
-                  <p>{t("growthDifference")}</p>
-                </details>
-              </section>
+              <p className="aside-note">{t("growthDifference")}</p>
             </>
           )}
           {tab === "games" && (
@@ -380,8 +453,7 @@ export function MiniApp() {
                         {["◉", "◇", "▧", "♧"][i]}
                       </span>
                       <h2>{t(k)}</h2>
-                      <span className="badge">{t("soon")}</span>
-                      <button disabled>{t("upcoming")}</button>
+                      <button disabled>{t("soon")}</button>
                     </section>
                   ),
                 )}
@@ -397,17 +469,9 @@ export function MiniApp() {
               >
                 {t("friends")} <span>→</span>
               </button>
-              {catalogue}
-              <section className="card">
-                <h2>{t("future")}</h2>
-                {(
-                  ["platformTask", "limitedActivity", "memberActivity"] as const
-                ).map((k) => (
-                  <div className="placeholder-row" key={k}>
-                    <span>{t(k)}</span>
-                    <small>{t("soon")}</small>
-                  </div>
-                ))}
+              <section className="card launching">
+                <h2>{t("activitiesLaunching")}</h2>
+                <p className="muted">{t("activitiesLaunchingBody")}</p>
               </section>
             </>
           )}
@@ -463,38 +527,14 @@ export function MiniApp() {
             </>
           )}
           {tab === "invite" && (
-            <>
-              <section className="hero">
-                <span className="pill">{t("friends")}</span>
-                <h2>{t("inviteTitle")}</h2>
-                <p>{t("inviteLead")}</p>
-                <button disabled>{t("inviteSoon")}</button>
-              </section>
-              <div className="summary invite-summary">
-                <div>
-                  <strong>{formatPoints(home.invitedCount, locale)}</strong>
-                  <span>{t("invited")}</span>
-                </div>
-                <div>
-                  <strong>—</strong>
-                  <span>{t("pendingReward")}</span>
-                  <small>{t("rulesUnpublished")}</small>
-                </div>
-              </div>
-              <section className="card">
-                <ol className="journey">
-                  {(["journey1", "journey2", "journey3"] as const).map((k) => (
-                    <li key={k}>{t(k)}</li>
-                  ))}
-                </ol>
-                <p className="muted">{t("journeyNote")}</p>
-              </section>
-              {history}
-              <div className="placeholder-row card">
-                <span>{t("rules")}</span>
-                <small>{t("soon")}</small>
-              </div>
-            </>
+            <InviteJourney
+              t={t}
+              locale={locale}
+              home={home}
+              page={kind === "referrals" ? page : undefined}
+              busy={busy}
+              more={() => void records("referrals", true)}
+            />
           )}
           {tab === "me" && (
             <>
@@ -669,7 +709,7 @@ export function MiniApp() {
               disabled={busy}
               onClick={() => select(item)}
             >
-              <span aria-hidden="true">{["⌂", "✧", "✦", "▧", "○"][i]}</span>
+              <Icon name={["home", "badge", "spark", "game", "user"][i]} />
               {t(item)}
             </button>
           ))}

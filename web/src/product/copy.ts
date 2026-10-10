@@ -4,6 +4,7 @@ export const productCopy = {
     overview: "总览",
     users: "用户",
     membership: "会员",
+    content: "内容",
     activities: "活动",
     points: "积分",
     games: "游戏",

@@ -1,5 +1,6 @@
-import {MemberAdmin} from './product/MemberAdmin';
+import { MemberAdmin } from "./product/MemberAdmin";
 import Dashboard from "./product/Dashboard";
+import RuntimeOps from "./product/ops/RuntimeOps";
 import {
   ProductSpace,
   UserMembership,
@@ -7,6 +8,13 @@ import {
   UserPlatforms,
 } from "./product/Spaces";
 import { productCopy } from "./product/copy";
+import type { DataDomain } from "./product/ops/OpsCenter";
+import {
+  AdminSidebar,
+  DomainLanding,
+  domainOf,
+  useSideMode,
+} from "./product/ops/nav";
 import Entitlements from "./entitlements/Entitlements";
 import PointExpiry from "./point-expiry/PointExpiry";
 import DailyData from "./platform-data/DailyData";
@@ -292,6 +300,8 @@ export default function App() {
       previous?.focus();
     };
   }, [selected]);
+  const side = useSideMode();
+  const [dataDomain, setDataDomain] = useState<DataDomain>("私域成效");
   const currentBrand = brands.find((x) => x.brandId === brand),
     currentBot = bots.find((x) => x.botId === bot);
   const alert = (s: string) =>
@@ -384,7 +394,7 @@ export default function App() {
       </div>
     );
   return (
-    <div className="shell">
+    <div className="shell" data-side={side.mode}>
       {drawer && (
         <button
           className="scrim"
@@ -392,58 +402,20 @@ export default function App() {
           onClick={() => setDrawer(false)}
         />
       )}
-      <aside className={drawer ? "sidebar open" : "sidebar"}>
-        <div className="logo">
-          T
-          <span>
-            CLUB<span className="muted">会员运营中心</span>
-          </span>
-        </div>
-        <div className="nav-caption">工作空间</div>
-        <nav>
-          {[
-            ["overview", "◫", productCopy.nav.overview],
-            ["users", "◎", productCopy.nav.users],
-            ["membership", "◇", productCopy.nav.membership],
-            ["activities", "✦", productCopy.nav.activities],
-            ["points", "◷", productCopy.nav.points],
-            ["games", "▧", productCopy.nav.games],
-            ["data", "▤", productCopy.nav.data],
-            ["settings", "⚙", productCopy.nav.settings],
-          ].map(([id, icon, title]) => (
-            <button
-              key={id}
-              className={
-                page === id ||
-                (
-                  {
-                    entitlements: "membership",
-                    "point-expiry": "points",
-                    "daily-data": "data",
-                    platforms: "settings",
-                    identities: "users",
-                  } as Record<string, string>
-                )[page] === id
-                  ? "active"
-                  : ""
-              }
-              onClick={() => {
-                setPage(id);
-                setDrawer(false);
-                clearDetails();
-              }}
-            >
-              <span>{icon}</span>
-              {title}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-note">
-          安全的运营边界
-          <br />
-          <small>业务操作由服务端验证并记录</small>
-        </div>
-      </aside>
+      <AdminSidebar
+        className={drawer ? "sidebar open" : "sidebar"}
+        active={domainOf(page)}
+        mode={side.width <= 760 ? "full" : side.mode}
+        onToggle={side.toggle}
+        brand={currentBrand?.name || "CLUB"}
+        env={import.meta.env.MODE === "staging-preview" ? "STAGING" : undefined}
+        onSelect={(id) => {
+          setPage(id);
+          setDrawer(false);
+          side.close();
+          clearDetails();
+        }}
+      />
       <div className="workspace">
         <header>
           <button
@@ -619,20 +591,60 @@ export default function App() {
               </button>
             ))}
           </div>
-          {page === "overview" || page === "data" || page === "points" ? (
+          {page === "overview" || page === "data" ? (
+            bot && !loading && !scopeError ? (
+              <RuntimeOps
+                key={base + page}
+                base={base}
+                brandId={brand}
+                permissions={permissions}
+                onExpire={expire}
+                mode={page === "overview" ? "overview" : "data"}
+                scopeLabel={{
+                  brand: currentBrand?.name || brand,
+                  bot: currentBot?.name || bot,
+                }}
+                domain={dataDomain}
+                onDomain={setDataDomain}
+                onNavigate={(t) => {
+                  if (t.startsWith("data:")) {
+                    setDataDomain(t.slice(5) as DataDomain);
+                    setPage("data");
+                  } else if (
+                    [
+                      "users",
+                      "membership",
+                      "identities",
+                      "daily-data",
+                      "entitlements",
+                    ].includes(t)
+                  ) {
+                    setPage(t);
+                    clearDetails();
+                  }
+                }}
+              />
+            ) : null
+          ) : page === "content" ? (
+            <DomainLanding kind="content" />
+          ) : page === "points" ? (
             bot && !loading && !scopeError ? (
               <Dashboard
                 key={base + page}
                 base={base}
                 permissions={permissions}
                 onExpire={expire}
-                dataCenter={page !== "overview"}
+                dataCenter
               />
             ) : null
           ) : page === "membership" ||
             page === "activities" ||
             page === "games" ? (
-            page === 'membership' ? <MemberAdmin brandId={brand} csrf={me.csrfToken} /> : <ProductSpace kind={page} />
+            page === "membership" ? (
+              <MemberAdmin brandId={brand} csrf={me.csrfToken} />
+            ) : (
+              <ProductSpace kind={page} />
+            )
           ) : page === "settings" ? (
             <>
               <section className="panel">
@@ -794,7 +806,11 @@ export default function App() {
               <span>当前积分余额</span>
               <strong>{pointBusy ? "读取中…" : (balance ?? "暂无数据")}</strong>
             </div>
-            <UserMembership base={base} userId={selected.id} onExpire={expire} />
+            <UserMembership
+              base={base}
+              userId={selected.id}
+              onExpire={expire}
+            />
             {permissions.includes("platform_identities.read") && (
               <UserPlatforms
                 key={`platforms:${base}/${selected.id}`}

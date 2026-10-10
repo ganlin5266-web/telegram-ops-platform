@@ -145,7 +145,7 @@ async function ready() {
 async function users() {
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: "用户", exact: true }));
   await screen.findByText("Ana Silva");
 }
 async function detail() {
@@ -253,7 +253,7 @@ it("bot switch rejects late user response from old scope", async () => {
         : undefined;
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: "用户", exact: true }));
   await waitFor(() => expect(resolve).toBeTypeOf("function"));
   fireEvent.change(screen.getByLabelText("Telegram Bot"), {
     target: { value: "a2" },
@@ -365,7 +365,7 @@ it("403 users endpoint shows permission error", async () => {
     p.includes("/users?") ? response({ error: "forbidden" }, 403) : undefined;
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: "用户", exact: true }));
   await screen.findByText("你没有权限执行此操作");
   expect(screen.queryByText("Ana Silva")).toBeNull();
 });
@@ -373,7 +373,7 @@ it("no users.read permission prevents user endpoint calls", async () => {
   grants = [];
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: "用户", exact: true }));
   await screen.findByText("你没有权限查看当前 Bot 用户。");
   expect(calls.some((x) => x.path.includes("/users?"))).toBe(false);
 });
@@ -384,7 +384,7 @@ it("network failure exits loading into retryable error", async () => {
       : undefined;
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: "用户", exact: true }));
   await screen.findByText("网络连接失败，请检查网络后重试");
   expect(screen.queryByText("正在加载…")).toBeNull();
 });
@@ -395,12 +395,12 @@ it("empty users are shown explicitly", async () => {
       : undefined;
   render(<App />);
   await screen.findByText("工作台总览");
-  fireEvent.click(screen.getByRole("button", { name: /◎用户|◎ 用户/ }));
+  fireEvent.click(screen.getByRole("button", { name: "用户", exact: true }));
   await screen.findByText("当前批次暂无用户");
 });
 it("Chinese UI never writes bot or user language", async () => {
   await ready();
-  fireEvent.click(screen.getByRole("button", { name: /⚙ 设置/ }));
+  fireEvent.click(screen.getByRole("button", { name: "设置", exact: true }));
   expect(screen.getAllByText(/pt-BR/).length).toBeGreaterThan(0);
   expect(
     calls.every((x) => !x.options.method || x.options.method === "GET"),

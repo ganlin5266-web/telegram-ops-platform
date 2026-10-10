@@ -888,3 +888,546 @@ nav button {
     padding: 16px 12px;
   }
 }
+/* Phase 1 · Action Home */
+.pass-chip {
+  display: inline-block;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #ffffff1a;
+  color: #e4ecd6;
+}
+.mini-shell .pass-top > .pass-level {
+  font-size: 15px;
+  font-weight: 650;
+  color: #e5f2a8;
+}
+.mini-shell .pass-growth {
+  justify-content: flex-start;
+  align-items: baseline;
+  gap: 8px;
+  margin: 20px 0 12px;
+}
+.pass-growth strong {
+  font-size: 38px;
+  font-weight: 650;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+.pass-growth span {
+  font-size: 13px;
+  color: #c9d8cc;
+}
+.member-pass progress {
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #ffffff22;
+  overflow: hidden;
+}
+.member-pass progress::-webkit-progress-bar {
+  background: #ffffff22;
+  border-radius: 8px;
+}
+.member-pass progress::-webkit-progress-value {
+  background: #d9ed95;
+  border-radius: 8px;
+}
+.member-pass progress::-moz-progress-bar {
+  background: #d9ed95;
+  border-radius: 8px;
+}
+.member-pass .pass-next {
+  font-size: 13px;
+  color: #f1f5e6;
+  font-weight: 600;
+  margin: 10px 0 4px;
+}
+.member-pass .pass-note {
+  color: #d9ed95;
+}
+.pass-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mini-shell .member-pass button {
+  border-radius: 12px;
+  background: #ffffff1f;
+  color: #f4f3e9;
+}
+.mini-shell .member-pass .pass-primary {
+  background: #d9ed95;
+  color: #19352b;
+}
+.pass-history {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #d3dfd7;
+}
+.pass-history li {
+  padding: 6px 0;
+  border-bottom: 1px solid #ffffff14;
+}
+.member-pass.pending h2 {
+  font-size: 22px;
+  margin: 16px 0 8px;
+}
+.today-actions {
+  display: grid;
+  gap: 10px;
+}
+.today-actions button {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e3e9e0;
+  border-radius: 16px;
+  padding: 14px;
+  color: #172d28;
+}
+.today-actions button.urgent {
+  border-color: #e7c27a;
+  background: #fff9ec;
+}
+.today-actions .tile-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #eef2e6;
+  font-size: 18px;
+}
+.today-actions strong {
+  display: block;
+  font-size: 14px;
+}
+.today-actions small {
+  display: block;
+  color: #718178;
+  font-size: 12px;
+}
+.today-actions .go {
+  color: #245b45;
+  font-weight: 700;
+}
+.home-skeleton {
+  height: 180px;
+  border-radius: 24px;
+  background: linear-gradient(90deg, #e8ece3, #f3f5ef, #e8ece3);
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite linear;
+  margin: 16px 0;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-skeleton {
+    animation: none;
+  }
+}
+/* Stage 1 revision · hierarchy */
+.mini-shell .member-pass .pass-level {
+  display: block;
+  font-size: 22px;
+  font-weight: 650;
+  color: #f4f3e9;
+  margin-top: 14px;
+}
+.pass-chip.soft {
+  background: #d9ed9526;
+  color: #d9ed95;
+}
+.mini-shell .pass-growth {
+  margin: 10px 0 12px;
+}
+.pass-bar {
+  height: 12px;
+  border-radius: 12px;
+  background: #0f2a22;
+  box-shadow: inset 0 0 0 1px #ffffff26;
+  overflow: hidden;
+}
+.pass-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 12px;
+  background: #d9ed95;
+}
+.pass-bar span.filled {
+  min-width: 6px;
+}
+.mini-shell .member-pass .pass-link {
+  background: none;
+  padding: 6px 0;
+  color: #d9ed95;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.primary-action {
+  display: grid;
+  gap: 12px;
+  background: #fff;
+  border: 1.5px solid #234d3d;
+  border-radius: 18px;
+  padding: 16px;
+}
+.primary-action strong {
+  display: block;
+  font-size: 16px;
+}
+.primary-action small {
+  display: block;
+  color: #718178;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.primary-action p {
+  margin: 0;
+  font-size: 12px;
+}
+.primary-action button {
+  background: #234d3d;
+  color: #f4f3e9;
+  border: 0;
+  border-radius: 12px;
+  padding: 13px;
+  font-weight: 700;
+  width: 100%;
+}
+.points-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 14px 16px;
+  background: #ebeede;
+  border-radius: 16px;
+}
+.points-strip small {
+  display: block;
+  font-size: 12px;
+  color: #637362;
+}
+.points-strip strong {
+  font-size: 20px;
+}
+.points-strip strong span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #637362;
+}
+.points-strip em {
+  display: block;
+  font-style: normal;
+  font-size: 12px;
+  color: #9a6512;
+}
+.points-strip button {
+  flex: none;
+  background: #fff;
+  border: 1px solid #d6ddd0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #234d3d;
+}
+.secondary-actions {
+  display: grid;
+  gap: 10px;
+}
+.secondary-actions > button {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e3e9e0;
+  border-radius: 16px;
+  padding: 12px 14px;
+  color: #172d28;
+}
+.secondary-actions .tile-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #eef2e6;
+  color: #234d3d;
+}
+.secondary-actions strong {
+  display: block;
+  font-size: 14px;
+}
+.secondary-actions small {
+  display: block;
+  color: #718178;
+  font-size: 12px;
+}
+.secondary-actions .go {
+  color: #245b45;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+}
+.aside-note {
+  font-size: 12px;
+  color: #8a968d;
+  text-align: center;
+  margin: 18px 0 0;
+}
+.mini-shell #mini-root .member-pass,
+.mini-shell .member-pass {
+  margin-bottom: 8px;
+}
+.mini-shell .member-pass .pass-top > span {
+  font-size: 11px;
+}
+.mini-shell .member-pass {
+  padding: 20px 22px;
+}
+.mini-shell .member-pass .pass-level {
+  margin-top: 10px;
+}
+.mini-shell .card-link {
+  display: block;
+  margin-left: auto;
+  font-size: 13px;
+  padding: 2px 0;
+}
+.mini-shell .section-title {
+  margin: 14px 0 10px;
+}
+.mini-shell nav .mini-icon {
+  display: block;
+  margin: 0 auto 2px;
+}
+/* Phase 1 · 320px polish */
+.mini-shell {
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
+}
+.pass-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  opacity: 0.75;
+}
+.compact-list,
+.launching {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.compact-list .placeholder-row:last-child {
+  border-bottom: 0;
+}
+.launching {
+  padding: 18px 20px;
+}
+.launching h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+.launching p {
+  margin: 0;
+  font-size: 13px;
+}
+.mini-shell .game-grid {
+  gap: 10px;
+}
+.mini-shell .game-tile {
+  padding: 14px 12px;
+  gap: 6px;
+}
+.mini-shell .game-tile h2 {
+  font-size: 15px;
+  margin: 0;
+}
+.game-glyph {
+  height: 40px;
+  font-size: 30px;
+}
+.game-tile button {
+  padding: 6px;
+  min-height: 32px;
+}
+/* Phase 2 · Retention + Referral */
+main > :last-child {
+  margin-bottom: 24px;
+}
+.pass-earn {
+  margin-top: 10px;
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 650;
+  background: #e3efe0;
+  color: #153d32;
+}
+.member-pass.near .pass-next {
+  font-weight: 700;
+}
+.primary-action.feedback,
+.primary-action.done {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.primary-action .gain {
+  font-size: 28px;
+  line-height: 1.1;
+  color: var(--accent);
+}
+.levelup-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e3efe0;
+  color: var(--accent);
+  animation: levelup-pop 0.5s ease-out;
+}
+@keyframes levelup-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .levelup-mark {
+    animation: none;
+  }
+}
+.primary-action.done strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.light-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.mini-shell .light-links button {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid #cddbc8;
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 12px;
+  min-height: 0;
+  width: auto;
+}
+.pending-note {
+  font-size: 13px;
+  color: #637269;
+}
+.growth-ways {
+  display: grid;
+  gap: 14px;
+}
+.way-group h3 {
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  color: #637269;
+  margin: 0 0 6px;
+}
+.way {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  border: 1px solid #e2e9df;
+  border-radius: 14px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.way-group.best .way {
+  border-color: var(--accent);
+}
+.way-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.way-body small {
+  font-size: 12px;
+  color: #637269;
+}
+.way-body .way-gain {
+  color: var(--accent);
+  font-weight: 600;
+}
+.way button {
+  border: 0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.way-status {
+  font-size: 11px;
+  color: #637269;
+  white-space: nowrap;
+}
+.way-status.done {
+  color: var(--accent);
+  font-weight: 650;
+}
+.invite-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.invite-progress small {
+  display: block;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.invite-progress strong {
+  font-size: 22px;
+}
+.invite-progress strong span {
+  font-size: 14px;
+  opacity: 0.7;
+}
+.rs {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  background: #eef2e9;
+}
+.rs-qualified,
+.rs-rewarded {
+  background: #dcebd6;
+  color: #153d32;
+}
+.steps5 li {
+  margin-bottom: 4px;
+}

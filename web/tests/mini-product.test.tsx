@@ -61,12 +61,9 @@ describe("Mini product presentation", () => {
   it("activity templates remain disabled with no invented amount, rules or progress", async () => {
     const u = await open();
     await u.click(nav().getByRole("button", { name: "活动", exact: true }));
-    expect(screen.getAllByRole("button", { name: "敬请期待" })).toHaveLength(4);
-    expect(
-      screen
-        .getAllByRole("button", { name: "敬请期待" })
-        .every((x) => (x as HTMLButtonElement).disabled),
-    ).toBe(true);
+    expect(screen.getByText("活动即将上线")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "敬请期待" })).toBeNull();
+    expect(screen.getByRole("button", { name: /邀请好友/ })).toBeTruthy();
     expect(screen.queryByText("查看规则")).toBeNull();
   });
   it("rewards separate points, ledger and real redemption history", async () => {
@@ -86,9 +83,7 @@ describe("Mini product presentation", () => {
   });
   it("invitations show the future journey without a fake sharing link", async () => {
     const u = await open();
-    await u.click(
-      screen.getByRole("button", { name: "邀请好友", exact: true }),
-    );
+    await u.click(screen.getByRole("button", { name: /邀请好友/ }));
     await screen.findByText("还没有邀请记录");
     expect(screen.getByText("分享专属入口")).toBeTruthy();
     expect(screen.queryByText("复制邀请链接")).toBeNull();
@@ -96,7 +91,7 @@ describe("Mini product presentation", () => {
   });
   it("game placeholder cannot grant chances; personal page hides technical names and IDs", async () => {
     const u = await open();
-    await u.click(screen.getByRole("button", { name: "小游戏 即将开放" }));
+    await u.click(nav().getByRole("button", { name: "小游戏", exact: true }));
     expect(screen.getByRole("heading", { name: "小游戏" })).toBeTruthy();
     await u.click(nav().getByRole("button", { name: "我的", exact: true }));
     expect(screen.getByText("平台账号")).toBeTruthy();

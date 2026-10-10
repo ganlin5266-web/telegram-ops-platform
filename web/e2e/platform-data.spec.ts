@@ -39,7 +39,10 @@ test("P4 real API browser upload preflight explicit activate duplicate and revis
     },
   );
   expect(res.ok()).toBeTruthy();
-  await page.getByRole("button", { name: "▤ 数据", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "一级导航" })
+    .getByRole("button", { name: "数据", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "平台数据", exact: true })
     .first()

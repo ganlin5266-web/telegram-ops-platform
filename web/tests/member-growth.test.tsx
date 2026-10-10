@@ -6,7 +6,7 @@ import {
   fireEvent,
   waitFor,
 } from "@testing-library/react";
-import { MemberCard } from "../src/mini/MemberCard";
+import { MemberCard, CheckinAction } from "../src/mini/MemberCard";
 import { MemberAdmin } from "../src/product/MemberAdmin";
 import { MemberMetrics } from "../src/product/MemberMetrics";
 vi.mock("../src/api", () => ({
@@ -30,12 +30,10 @@ describe("Member Batch A UI", () => {
     expect(screen.queryByText(/LV1/)).toBeNull();
   });
   it("enabled member displays protected level, progress and real history", async () => {
-    const history = vi
-      .fn()
-      .mockResolvedValue({
-        items: [{ id: "a", business_date: "2026-10-01", delta: "-60" }],
-        next: null,
-      });
+    const history = vi.fn().mockResolvedValue({
+      items: [{ id: "a", business_date: "2026-10-01", delta: "-60" }],
+      next: null,
+    });
     render(
       <MemberCard
         locale="zh-CN"
@@ -55,7 +53,7 @@ describe("Member Batch A UI", () => {
       />,
     );
     expect(screen.getByText("LV3 · Gold")).toBeTruthy();
-    expect(screen.getByText("当前等级受到保护")).toBeTruthy();
+    expect(screen.getByText("你的会员等级已保留")).toBeTruthy();
     fireEvent.click(screen.getByText("成长记录"));
     await screen.findByText(/-60 Growth/);
     expect(history).toHaveBeenCalledOnce();
@@ -87,11 +85,12 @@ describe("Member Batch A UI", () => {
     const checkin = vi.fn().mockRejectedValue(new Error("hidden")),
       refresh = vi.fn();
     render(
-      <MemberCard
+      <CheckinAction
         locale="en"
-        member={{ enabled: true, available: true, level: 1, growth: "0" }}
         checkin={checkin}
         onUpdated={refresh}
+        title="Check in today"
+        body="b"
       />,
     );
     fireEvent.click(screen.getByText("Daily check-in"));

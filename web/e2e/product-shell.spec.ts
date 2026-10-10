@@ -61,7 +61,7 @@ test("product shell preserves admin identity and contains the user table on narr
   await page.goto("/");
   await expect(page.getByText("验收管理员", { exact: true })).toBeVisible();
   await page.getByLabel("打开导航").click();
-  await page.getByRole("button", { name: "◎ 用户", exact: true }).click();
+  await page.getByRole("button", { name: "用户", exact: true }).click();
   await expect(page.locator("tbody tr")).toHaveCount(1);
   for (const width of [320, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });

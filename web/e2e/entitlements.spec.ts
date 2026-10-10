@@ -11,7 +11,10 @@ test("qualification admin navigation is isolated and remains disabled before app
     .fill(process.env.UI_TEST_PASSWORD!);
   await page.getByRole("button", { name: "登录工作台 →", exact: true }).click();
   await expect(page.getByRole("heading", { name: "工作台总览" })).toBeVisible();
-  await page.getByRole("button", { name: "◇ 会员", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "一级导航" })
+    .getByRole("button", { name: "会员", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "会员权益", exact: true })
     .first()

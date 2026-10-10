@@ -1,0 +1,326 @@
+/* Admin global shell: sidebar + header. White/light grey body, deep green accent. */
+.adm-side {
+  --adm-accent: #1f5a43;
+  --adm-soft: #e6efe8;
+  --adm-line: #e3e8e1;
+  background: #fff;
+  border-right: 1px solid var(--adm-line);
+  display: flex;
+  flex-direction: column;
+  width: 228px;
+  padding: 18px 12px;
+  box-sizing: border-box;
+  color: #34463b;
+  z-index: 30;
+}
+.adm-brand {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 4px 10px 18px;
+  border-bottom: 1px solid var(--adm-line);
+  margin-bottom: 12px;
+}
+.adm-brand b {
+  font-size: 16px;
+  color: #16291f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-brand small {
+  grid-column: 1;
+  font-size: 11px;
+  color: #7b887e;
+}
+.adm-env {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #8a5a00;
+  background: #fbf1dc;
+  border: 1px solid #efd9a6;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.adm-side nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.adm-side nav button,
+.adm-collapse {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #4d5f53;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+.adm-side nav button:hover,
+.adm-collapse:hover {
+  background: #f3f6f2;
+  color: #1d3326;
+}
+.adm-side nav button:focus-visible,
+.adm-collapse:focus-visible {
+  outline: 2px solid #91b09b;
+  outline-offset: 1px;
+}
+.adm-side nav button.active {
+  background: var(--adm-soft);
+  color: var(--adm-accent);
+  font-weight: 650;
+}
+.adm-side nav button.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--adm-accent);
+}
+.adm-icon {
+  flex: none;
+}
+.adm-label {
+  flex: 1;
+  white-space: nowrap;
+}
+.adm-badge {
+  font-size: 11px;
+  font-weight: 650;
+  min-width: 20px;
+  text-align: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fbece8;
+  color: #b4432f;
+}
+.adm-side-foot {
+  margin-top: auto;
+  border-top: 1px solid var(--adm-line);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.adm-admin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #5e6d62;
+}
+.adm-admin i {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--adm-soft);
+  color: var(--adm-accent);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-weight: 700;
+  flex: none;
+}
+.adm-admin span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.adm-admin small {
+  color: #8a968d;
+}
+.adm-admin button {
+  font-size: 12px;
+  padding: 4px 8px;
+}
+/* Rail: icons only, label available through title + accessible name. */
+.adm-side[data-mode="rail"] {
+  width: 68px;
+  padding: 18px 10px;
+}
+.adm-side[data-mode="rail"] .adm-label,
+.adm-side[data-mode="rail"] .adm-brand small,
+.adm-side[data-mode="rail"] .adm-admin span,
+.adm-side[data-mode="rail"] .adm-admin button {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.adm-side[data-mode="rail"] .adm-brand {
+  grid-template-columns: 1fr;
+  padding: 4px 0 14px;
+  text-align: center;
+}
+.adm-side[data-mode="rail"] .adm-brand b {
+  font-size: 13px;
+}
+.adm-side[data-mode="rail"] .adm-env {
+  grid-row: auto;
+  grid-column: 1;
+  justify-self: center;
+  font-size: 9px;
+  padding: 1px 4px;
+}
+.adm-side[data-mode="rail"] nav button,
+.adm-side[data-mode="rail"] .adm-collapse {
+  justify-content: center;
+  padding: 10px 0;
+}
+.adm-side[data-mode="rail"] .adm-admin {
+  justify-content: center;
+  padding: 6px 0;
+}
+.adm-side[data-mode="rail"] .adm-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+.adm-side[data-mode="overlay"] {
+  box-shadow: 8px 0 30px #0f1a141f;
+}
+
+/* Preview / standalone shell */
+.adm-shell {
+  display: flex;
+  position: relative;
+  min-height: 100vh;
+  background: #f5f7f4;
+}
+.adm-shell > .adm-side {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  flex: none;
+}
+.adm-shell[data-mode="overlay"] {
+  padding-left: 68px;
+}
+.adm-shell[data-mode="overlay"] > .adm-side {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  height: auto;
+}
+.adm-main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 28px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  container-type: inline-size;
+}
+
+/* Real admin shell (fixed sidebar from style.css), mode driven by viewport width. */
+.shell > .sidebar.adm-side {
+  background: #fff;
+  color: #34463b;
+  border-right: 1px solid #e3e8e1;
+  padding: 18px 12px;
+}
+.shell > .sidebar.adm-side nav button {
+  color: #4d5f53;
+  margin: 0;
+  padding: 10px 12px;
+}
+.shell > .sidebar.adm-side nav button.active {
+  background: #e6efe8;
+  color: #1f5a43;
+}
+.shell > .sidebar.adm-side nav button:hover {
+  background: #f3f6f2;
+  color: #1d3326;
+}
+@media (min-width: 761px) {
+  .shell > .sidebar.adm-side[data-mode="rail"] {
+    width: 68px;
+    padding: 18px 10px;
+  }
+  .shell[data-side="rail"] > .workspace,
+  .shell[data-side="overlay"] > .workspace {
+    margin-left: 68px;
+  }
+  .shell[data-side="full"] > .workspace {
+    margin-left: 228px;
+  }
+  .shell > .sidebar.adm-side {
+    width: 228px;
+  }
+}
+
+.adm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.adm-head h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -0.3px;
+  color: #15271d;
+}
+.adm-head p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #6f7d71;
+}
+.adm-head-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.adm-landing {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.adm-landing .ops-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.adm-side nav button .adm-label {
+  font-size: 14px;
+}
+.adm-side nav button .adm-badge {
+  font-size: 11px;
+}
+header.adm-head {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  position: static;
+  box-shadow: none;
+  min-height: 0;
+}

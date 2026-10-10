@@ -80,7 +80,11 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
   await expect(
     page.getByTestId("today-focus").getByRole("button", { name: "会员" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "小游戏 即将开放" }).click();
+  // Mini Phase 1 moved 小游戏 from a home shortcut into the bottom navigation.
+  await page
+    .getByRole("navigation")
+    .getByRole("button", { name: "小游戏", exact: true })
+    .click();
   await expect(page.getByRole("heading", { name: "小游戏" })).toBeVisible();
   await page
     .getByRole("navigation")
@@ -128,10 +132,7 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     ).toBeVisible();
     if (tab === "会员") await expectMemberGrowthDisabled();
     if (tab === "活动") {
-      await expect(page.locator(".activity-card")).toHaveCount(4);
-      await expect(
-        page.locator(".activity-card button").first(),
-      ).toBeDisabled();
+      await expect(page.getByText("活动即将上线")).toBeVisible();
     }
     if (tab === "奖励") {
       await expect(page.getByText("还没有积分记录")).toBeVisible();
