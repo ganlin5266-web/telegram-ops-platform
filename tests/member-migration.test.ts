@@ -111,7 +111,7 @@ test(
         );
       assert.equal(
         (await one(db, "SELECT count(*)::int AS n FROM schema_migrations")).n,
-        14,
+        15,
       );
     } finally {
       await db.close();

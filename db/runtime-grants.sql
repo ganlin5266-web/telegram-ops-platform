@@ -58,3 +58,9 @@ GRANT UPDATE(id) ON referral_reward_rule_versions TO telegram_app; -- row locks 
 GRANT UPDATE(status,published_at,published_by,disabled_at,disabled_by) ON referral_reward_rule_versions TO telegram_app;
 GRANT UPDATE(status,reward_status) ON referrals TO telegram_app;
 GRANT UPDATE(qualified_count,rewarded_count,updated_at) ON referral_reward_daily_counters TO telegram_app;
+
+-- Batch 2B: fixed-tier configuration and encrypted inventory only.
+-- Allocation, Points debit, claim and refund remain outside this batch.
+GRANT SELECT,INSERT ON redemption_code_batches TO telegram_app;
+GRANT INSERT ON redemption_rules,redemption_codes TO telegram_app;
+GRANT UPDATE(status,enabled,published_by,published_at,disabled_by,disabled_at) ON redemption_rules TO telegram_app;

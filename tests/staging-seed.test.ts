@@ -108,15 +108,15 @@ test('seed rejects a conflicting secret ref or foreign Brand association',()=>fi
  assert.deepEqual(await counts(raw),{brands:1,bots:1,audits:2});
 }));
 
-test('seed migration guard strictly accepts only ordered 001-014 and rejects missing, duplicate, future or tampered evidence',()=>fixture(async(_db,raw)=>{
+test('seed migration guard strictly accepts only ordered 001-015 and rejects missing, duplicate, future or tampered evidence',()=>fixture(async(_db,raw)=>{
  const rows=(await raw.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows;
- assert.equal(rows.length,14);const first=rows[0]!,second=rows[1]!,last=rows[13]!;assert.equal(last.name,'014_batch2a_referral_rewards.sql');
+ assert.equal(rows.length,15);const first=rows[0]!,second=rows[1]!,last=rows[14]!;assert.equal(last.name,'015_batch2b_redemptions.sql');
  const reader=(evidence:typeof rows):Queryable=>({query:async()=>({rows:evidence}) as any});
  await verifyMigrations(reader(rows));
  for(const bad of [rows.slice(0,-1),[...rows,last],[...rows.slice(0,-1),first],[second,first,...rows.slice(2)],[...rows,{name:'014_unapproved.sql',checksum:'unapproved'}]]) {
   await assert.rejects(()=>verifyMigrations(reader(bad)),/migration_set_mismatch/);
  }
- await assert.rejects(()=>verifyMigrations(reader(rows.map((r,i)=>i===13?{...r,checksum:'tampered'}:r))),/migration_checksum_mismatch/);
+ await assert.rejects(()=>verifyMigrations(reader(rows.map((r,i)=>i===14?{...r,checksum:'tampered'}:r))),/migration_checksum_mismatch/);
  await assert.rejects(()=>raw.query('INSERT INTO schema_migrations(name,checksum) VALUES($1,$2)',[last.name,last.checksum]),/duplicate key/);
  assert.deepEqual(await counts(raw),{brands:0,bots:0,audits:0});
 }));

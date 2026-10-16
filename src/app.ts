@@ -1,6 +1,8 @@
 import {attachMembers} from './member-routes.js';
 import {attachOpsRead} from './ops-read-routes.js';
 import {attachReferralRewards} from './referral-routes.js';
+import {attachAdminRedemptions} from './redemption-v2-routes.js';
+import type {RedemptionCodeVault} from './redemption-vault.js';
 import {attachEntitlements} from './entitlement-routes.js';
 import {attachPointExpiry} from './point-expiry-routes.js';
 import {pointSummary,lotsEnabled} from './point-lots.js';
@@ -19,7 +21,7 @@ import {attachOperationsQueries} from './operations-queries.js';
 import {attachMiniAuth,validateMiniConfig,type MiniConfig} from './mini-auth.js';
 import type {FastifyRequest} from 'fastify';
 const scopeSchema=z.object({brandId:z.uuid(),botId:z.uuid()});
-export function createApp(db:Database,secrets:SecretProvider,authenticate:Authenticator,browserAuth?:BrowserAuthConfig,miniAuth?:MiniConfig) {
+export function createApp(db:Database,secrets:SecretProvider,authenticate:Authenticator,browserAuth?:BrowserAuthConfig,miniAuth?:MiniConfig,redemptionVault?:RedemptionCodeVault) {
  if(miniAuth) validateMiniConfig(miniAuth);
  const app=Fastify({bodyLimit:262144,logger:{redact:['req.headers.authorization','req.headers.x-telegram-bot-api-secret-token','req.headers.cookie','req.headers.x-csrf-token','res.headers.set-cookie']},logController:new LogController({disableRequestLogging:true})});
  app.setErrorHandler((err,request,reply)=>{
@@ -55,6 +57,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  attachMembers(app,db,authenticateRequest);
  attachOpsRead(app,db,authenticateRequest);
  attachReferralRewards(app,db,authenticateRequest);
+ attachAdminRedemptions(app,db,authenticateRequest,redemptionVault);
  app.get(`${base}/users/:userId/points`,async request=>{
   const s=scopeSchema.extend({userId:z.uuid()}).parse(request.params),p=await authenticateRequest(request);
   return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');await one(tx,'SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND id=$3',[...scopeParams(s),s.userId]);
