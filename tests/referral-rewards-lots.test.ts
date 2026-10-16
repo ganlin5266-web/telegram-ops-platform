@@ -78,6 +78,11 @@ test("Lots-enabled referral reward is atomically 50/20, idempotent, and rolls ba
   const duplicate = await db.transaction((tx) => evaluateReferralByIdentityTx(tx, f.identity, randomUUID()));
   assert.equal(duplicate.status, "already_rewarded");
   assert.equal((await one(db, "SELECT count(*)::int AS n FROM point_ledger WHERE bot_id=$1", [f.botId])).n, 2);
+  process.env.BATCH2A_REFERRAL_REWARDS_ENABLED = "false";
+  const stopped = await db.transaction((tx) => evaluateReferralByIdentityTx(tx, f.identity, randomUUID()));
+  assert.equal(stopped.status, "disabled");
+  assert.equal((await one(db, "SELECT count(*)::int AS n FROM point_ledger WHERE bot_id=$1", [f.botId])).n, 2);
+  process.env.BATCH2A_REFERRAL_REWARDS_ENABLED = "true";
   const failed = await fixture();
   process.env.POINT_WRITES_PAUSED = "true";
   try {
