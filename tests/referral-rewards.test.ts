@@ -9,6 +9,7 @@ import { changeReferralRule, createReferralRule, evaluateReferralByIdentityTx } 
 let db: Database;
 let close: () => Promise<void>;
 before(async () => {
+  process.env.BATCH2A_REFERRAL_REWARDS_ENABLED = "true";
   const p = new PGlite();
   const adapt = (client: any): Queryable => ({
     query: async (sql, params) =>
@@ -18,7 +19,10 @@ before(async () => {
   close = () => p.close();
   await migrate(db);
 });
-after(async () => close());
+after(async () => {
+  delete process.env.BATCH2A_REFERRAL_REWARDS_ENABLED;
+  await close();
+});
 
 test("Batch 2A grants 50/20 atomically and counts invitations separately from ledger rows", async () => {
   const brand = await one(db, "INSERT INTO brands(name,slug,default_language) VALUES('B2A',$1,'en') RETURNING id", [randomUUID()]);

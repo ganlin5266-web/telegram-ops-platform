@@ -4,6 +4,13 @@ import { DomainError, one, type Database, type Queryable, type Scope } from "./d
 import { authorize, type Principal } from "./auth.js";
 import { postPoints } from "./points.js";
 
+/**
+ * Batch 2A is a separately approved write path. Any value other than the
+ * exact string "true" keeps automatic, internal, and manual evaluation off.
+ */
+export const referralRewardsEnabled = () =>
+  process.env.BATCH2A_REFERRAL_REWARDS_ENABLED === "true";
+
 export async function authorizeBrand(tx: Queryable, p: Principal, brandId: string, permission: string) {
   const row = (await tx.query(
     `SELECT a.id FROM admins a JOIN admin_roles ar ON ar.admin_id=a.id
@@ -69,6 +76,7 @@ async function existingOutcome(tx: Queryable, brandId: string, platformId: strin
 
 /** Evaluate one verified platform identity. Caller may already hold the identity lock. */
 export async function evaluateReferralByIdentityTx(tx: Queryable, identityId: string, requestId: string, adminId: string | null = null) {
+  if (!referralRewardsEnabled()) return { status: "disabled" as const };
   const identity = await one(tx,
     `SELECT i.*,p.uid_case,p.timezone,p.status AS platform_status,p.id AS checked_platform_id
        FROM platform_identities i JOIN platforms p ON p.brand_id=i.brand_id AND p.id=i.platform_id
@@ -171,6 +179,7 @@ export async function evaluateReferralByIdentityTx(tx: Queryable, identityId: st
 export async function evaluateReferralReward(db: Database, p: Principal, s: Scope, referralId: string, requestId: string) {
   return db.transaction(async (tx) => {
     await authorize(tx, p, s, "referrals.evaluate");
+    if (!referralRewardsEnabled()) return { status: "disabled" as const };
     const referral = await one(tx, "SELECT invitee_id FROM referrals WHERE brand_id=$1 AND bot_id=$2 AND id=$3", [s.brandId,s.botId,referralId]);
     const identity = (await tx.query(`SELECT id FROM platform_identities WHERE brand_id=$1 AND bot_id=$2 AND user_id=$3 AND status IN ('verified','conflict','revoked') ORDER BY submitted_at DESC,id DESC LIMIT 1`, [s.brandId,s.botId,referral.invitee_id])).rows[0];
     if (!identity) return { status: "waiting_for_verified_uid" };
