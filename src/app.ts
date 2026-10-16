@@ -1,5 +1,6 @@
 import {attachMembers} from './member-routes.js';
 import {attachOpsRead} from './ops-read-routes.js';
+import {attachReferralRewards} from './referral-routes.js';
 import {attachEntitlements} from './entitlement-routes.js';
 import {attachPointExpiry} from './point-expiry-routes.js';
 import {pointSummary,lotsEnabled} from './point-lots.js';
@@ -53,6 +54,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  attachEntitlements(app,db,authenticateRequest);
  attachMembers(app,db,authenticateRequest);
  attachOpsRead(app,db,authenticateRequest);
+ attachReferralRewards(app,db,authenticateRequest);
  app.get(`${base}/users/:userId/points`,async request=>{
   const s=scopeSchema.extend({userId:z.uuid()}).parse(request.params),p=await authenticateRequest(request);
   return db.transaction(async tx=>{await authorize(tx,p,s,'users.read');await one(tx,'SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND id=$3',[...scopeParams(s),s.userId]);

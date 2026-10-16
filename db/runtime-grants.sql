@@ -51,3 +51,10 @@ GRANT UPDATE(current_evaluation_id) ON growth_sources TO telegram_app;
 GRANT UPDATE(status,attempts,next_attempt_at,lease_until,lease_token,last_error_code,completed_at) ON growth_evaluation_tasks TO telegram_app;
 
 GRANT UPDATE(member_id) ON growth_accounts TO telegram_app; -- row lock only; identity trigger prevents changes
+
+-- Batch 2A Referral: append-only qualification/reward evidence and rule lifecycle.
+GRANT SELECT,INSERT ON referral_reward_rule_versions,referral_qualification_evidence,referral_reward_events,referral_reward_daily_counters TO telegram_app;
+GRANT UPDATE(id) ON referral_reward_rule_versions TO telegram_app; -- row locks only; lifecycle trigger protects rule contents
+GRANT UPDATE(status,published_at,published_by,disabled_at,disabled_by) ON referral_reward_rule_versions TO telegram_app;
+GRANT UPDATE(status,reward_status) ON referrals TO telegram_app;
+GRANT UPDATE(qualified_count,rewarded_count,updated_at) ON referral_reward_daily_counters TO telegram_app;

@@ -1,5 +1,6 @@
 import {queueGrowthSourceChange} from './member-task-queue.js';
 import {enqueueEntitlementSourceChange} from './entitlements.js';
+import {evaluateReferralByIdentityTx} from './referral-rewards.js';
 import { z } from "zod";
 import {
   DomainError,
@@ -343,6 +344,8 @@ export async function reviewIdentity(
       p.adminId,
       v.reasonCode,
     );
+    if (v.action === "verify")
+      await evaluateReferralByIdentityTx(tx, updated.id, requestId, p.adminId);
     await enqueueEntitlementSourceChange(tx,s.brandId,r.platform_id,'identity_change',`${id}:${target}`,undefined,r.user_id,s.botId);
     await queueGrowthSourceChange(tx,s.brandId,r.platform_id,`identity:${id}:${target}`,undefined,r.user_id,s.botId);
     return safeIdentity(
