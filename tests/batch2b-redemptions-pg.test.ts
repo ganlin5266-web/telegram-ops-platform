@@ -1,6 +1,7 @@
 import {after,before,test} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes,randomUUID} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
 import {migrate} from '../src/migrations.js';
 import {one,postgres,type Database} from '../src/db.js';
 import {
@@ -128,4 +129,37 @@ test('PG17 keeps same-batch replay and rule version creation idempotent/serializ
  },randomUUID());
  const rules=await Promise.all([create(),create()]);
  assert.deepEqual(rules.map(r=>Number(r.version)).sort((a,b)=>a-b),[1,2]);
+});
+
+test('PG17 runtime grant can change inventory state but not encrypted payload or history',{
+ skip:!enabled
+},async()=>{
+ const f=await pgFixture();
+ await importCodeBatch(db,vault,f.principal,f.scopeA,{
+  ruleId:f.ruleA.id,codes:[{code:'PG-RUNTIME-GRANT',expiresAt:null}]
+ },randomUUID());
+ const code=await one(db,`SELECT id FROM redemption_codes
+  WHERE brand_id=$1 AND platform_id=$2 AND status='available'`,
+  [f.brandId,f.platformId]);
+ const role='b2b_rt_'+randomUUID().replaceAll('-','');
+ await db.query(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`);
+ try {
+  await db.query((await readFile('db/runtime-grants.sql','utf8')).replaceAll('telegram_app',role));
+  await db.transaction(async tx=>{
+   await tx.query(`SET LOCAL ROLE ${role}`);
+   await tx.query("UPDATE redemption_codes SET status='disabled' WHERE id=$1",[code.id]);
+  });
+  for(const sql of [
+   "UPDATE redemption_codes SET code_ciphertext='\\x00' WHERE id=$1",
+   "UPDATE redemption_codes SET code_fingerprint='0' WHERE id=$1",
+   'DELETE FROM redemption_codes WHERE id=$1',
+   'TRUNCATE redemption_code_batches'
+  ]) await assert.rejects(()=>db.transaction(async tx=>{
+   await tx.query(`SET LOCAL ROLE ${role}`);
+   await tx.query(sql,sql.includes('$1')?[code.id]:undefined);
+  }),/permission denied/);
+ } finally {
+  await db.query(`DROP OWNED BY ${role}`);
+  await db.query(`DROP ROLE ${role}`);
+ }
 });

@@ -8,7 +8,10 @@ GRANT INSERT ON telegram_users,telegram_updates,point_accounts,point_ledger,refe
 GRANT UPDATE(username,first_name,last_name,telegram_language_code,first_started_at,last_interaction_at,updated_at) ON telegram_users TO telegram_app;
 -- Required for SELECT FOR UPDATE. Identity updates still cannot cross FK boundaries.
 GRANT UPDATE(id) ON telegram_bots TO telegram_app;
-GRANT UPDATE ON redemptions,redemption_codes TO telegram_app;
+GRANT UPDATE ON redemptions TO telegram_app;
+-- Reservation/disable transitions only. Encrypted payload, fingerprint, scope,
+-- batch and expiry metadata stay owner/insert-only after creation.
+GRANT UPDATE(status,redemption_id,assigned_at) ON redemption_codes TO telegram_app;
 GRANT UPDATE(id) ON point_accounts TO telegram_app;
 GRANT UPDATE(id) ON redemption_rules TO telegram_app;
 -- No DELETE, TRUNCATE, schema DDL, role management or direct balance writes granted.

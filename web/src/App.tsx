@@ -22,6 +22,7 @@ import { useEffect, useRef, useState } from "react";
 import { ApiError, json, operation, request, type Operation } from "./api";
 import PlatformCenter from "./platforms/PlatformCenter";
 import UsersCenter from "./operations/UsersCenter";
+import RedemptionInventory from "./redemptions/RedemptionInventory";
 import {
   UserOverview,
   PointSummary,
@@ -504,6 +505,7 @@ export default function App() {
                     platforms: "平台管理",
                     "point-expiry": "积分有效期",
                     entitlements: "会员权益",
+                    redemptions: "兑换档位与库存",
                     "daily-data": "平台数据 · 用户日报",
                     identities: "UID绑定审核",
                   }[page]
@@ -554,11 +556,18 @@ export default function App() {
                   points: [
                     ["points", "Points总览"],
                     ["point-expiry", "积分有效期"],
+                    ["redemptions", "兑换码库存"],
                     ["users", "用户积分与记录"],
                   ],
                   "point-expiry": [
                     ["points", "Points总览"],
                     ["point-expiry", "积分有效期"],
+                    ["redemptions", "兑换码库存"],
+                  ],
+                  redemptions: [
+                    ["points", "Points总览"],
+                    ["point-expiry", "积分有效期"],
+                    ["redemptions", "兑换码库存"],
                   ],
                   data: [
                     ["data", "日 / 周 / 月报表"],
@@ -720,6 +729,16 @@ export default function App() {
           ) : page === "point-expiry" ? (
             bot && !loading && !scopeError ? (
               <PointExpiry
+                key={base}
+                base={base}
+                permissions={permissions}
+                csrf={me.csrfToken}
+                onExpire={expire}
+              />
+            ) : null
+          ) : page === "redemptions" ? (
+            bot && !loading && !scopeError ? (
+              <RedemptionInventory
                 key={base}
                 base={base}
                 permissions={permissions}

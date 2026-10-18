@@ -22,6 +22,7 @@ export const legacyDomain: Record<string, Domain> = {
   identities: "users",
   entitlements: "membership",
   "point-expiry": "points",
+  redemptions: "points",
   "daily-data": "data",
   platforms: "settings",
 };
