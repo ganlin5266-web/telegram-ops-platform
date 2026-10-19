@@ -16,12 +16,28 @@ Implemented:
 
 Key management:
 
-- `REDEMPTION_CODE_ENCRYPTION_KEY` and `REDEMPTION_CODE_FINGERPRINT_KEY` are
-  independent 32-byte base64 secrets. Partial or malformed configuration fails
-  startup; completely absent configuration disables imports with a safe 503.
+- `REDEMPTION_CODE_ENCRYPTION_KEYS` is a server-only JSON object mapping an
+  immutable version label to each 32-byte base64 AES key.
+  `REDEMPTION_CODE_ACTIVE_KEY_VERSION` selects the key for new imports. Stored
+  `code_key_version` selects the matching old key during decryption, so rotating
+  the active key does not make existing inventory unreadable.
+- `REDEMPTION_CODE_FINGERPRINT_KEY` is an independent 32-byte base64 secret and
+  remains stable across encryption rotations. This preserves same-platform
+  duplicate detection. Changing it requires a separately designed data
+  migration and is outside Batch 2B.
+- Partial, malformed, ambiguous, or missing-active-key configuration fails
+  startup without printing key material. Completely absent configuration
+  disables imports with a safe 503. Legacy single-key variables remain accepted
+  for a controlled transition but cannot be mixed with the keyring variables.
+- Rotation order: add the new version while retaining every referenced old
+  version; deploy and verify old-code decryption; switch only the active version;
+  verify new imports record it. Remove an old key only after a read-only query
+  proves no inventory row references that version. Roll back by restoring the
+  prior active label while retaining both keys.
 - The fingerprint key is a permanent deduplication identity and must remain
-  stable. Encryption-key rotation needs a versioned key ring before Batch 2C can
-  decrypt older inventory; this branch does not rotate keys or expose codes.
+  stable. Key values belong only in Render secret environment variables or an
+  equivalent secret manager; they never enter Git, logs, audits, API responses,
+  browser bundles, or Admin UI.
 - Runtime grants allow only code state/assignment transitions. Ciphertext,
   authentication tag, fingerprint, scope, batch, key version, and expiry cannot
   be updated by the runtime role.
