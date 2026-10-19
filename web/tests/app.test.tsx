@@ -168,9 +168,13 @@ async function confirm() {
 }
 it("loads real-shaped me, brand, bot and scoped permission endpoints", async () => {
   await ready();
-  expect(
-    calls.some((x) => x.path === "/v1/me/permissions?brandId=a&botId=a1"),
-  ).toBe(true);
+  await waitFor(() =>
+    expect(
+      calls.some(
+        (x) => x.path === "/v1/me/permissions?brandId=a&botId=a1",
+      ),
+    ).toBe(true),
+  );
   expect(screen.getAllByText("测试管理员").length).toBeGreaterThan(0);
 });
 it("login success uses cookie credentials and login CSRF header without retaining password", async () => {
