@@ -18,6 +18,7 @@ import {
   type Key,
 } from "./i18n";
 import PlatformAccounts from "./PlatformAccounts";
+import RedemptionCentre from "./RedemptionCentre";
 import {
   CheckinPanel,
   DailyDone,
@@ -43,6 +44,7 @@ export function MiniApp({
     [out, setOut] = useState(false),
     [kind, setKind] = useState<Kind>("point-ledger"),
     [page, setPage] = useState<Page>(),
+    [recoverRedemptionId, setRecoverRedemptionId] = useState<string>(),
     [panel, setPanel] = useState<
       "games" | "language" | "help" | "platformAccount" | null
     >(null),
@@ -204,6 +206,10 @@ export function MiniApp({
                   "success",
                   "failed",
                   "cancelled",
+                  "code_assigned",
+                  "code_claimed",
+                  "review_required",
+                  "refunded",
                 ].includes(r.status)
                   ? r.status
                   : r.status
@@ -211,6 +217,17 @@ export function MiniApp({
                     : "posted") as Key,
               )}
             </small>
+            {kind === "redemptions" &&
+              ["code_assigned", "code_claimed", "review_required"].includes(
+                r.status ?? "",
+              ) && (
+                <button
+                  className="text-button"
+                  onClick={() => setRecoverRedemptionId(r.id)}
+                >
+                  {t("viewCode")}
+                </button>
+              )}
           </div>
         </article>
       ))}
@@ -505,9 +522,11 @@ export function MiniApp({
                 >
                   {t("ledger")}
                 </button>
-                <button disabled>
+                <button
+                  aria-pressed={kind === "redemptions"}
+                  onClick={() => historySelect("redemptions")}
+                >
                   {t("redeemCentre")}
-                  <small>{t("soon")}</small>
                 </button>
                 <button
                   aria-pressed={kind === "redemptions"}
@@ -516,6 +535,15 @@ export function MiniApp({
                   {t("myRedeem")}
                 </button>
               </div>
+              {kind === "redemptions" && (
+                <RedemptionCentre
+                  client={client}
+                  locale={locale}
+                  t={t}
+                  onChanged={refreshHome}
+                  recoverId={recoverRedemptionId}
+                />
+              )}
               <details className="card">
                 <summary>{t("earnPoints")}</summary>
                 <p>{t("earnPointsBody")}</p>

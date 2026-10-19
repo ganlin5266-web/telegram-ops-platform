@@ -27,10 +27,12 @@ const response = (data: unknown, status = 200) =>
   });
 let calls: { path: string; options: RequestInit }[];
 let denied = false;
+let orderRows: unknown[] = [];
 
 beforeEach(() => {
   calls = [];
   denied = false;
+  orderRows = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (path: string, options: RequestInit) => {
@@ -101,6 +103,7 @@ beforeEach(() => {
             },
           ],
         });
+      if (path.endsWith("/redemptions")) return response({ items: orderRows });
       if (path.endsWith("/platforms"))
         return response({
           items: [
@@ -134,6 +137,44 @@ it("does not request inventory without read permission", () => {
   );
   expect(screen.getByText(/没有查看兑换配置与库存的权限/)).toBeTruthy();
   expect(calls).toHaveLength(0);
+});
+
+it("lists safe order metadata and independently gates manual review", async () => {
+  orderRows = [
+    {
+      id: "order-1",
+      platform_id: "platform-1",
+      points_cost: "100",
+      status: "code_claimed",
+      business_date: "2026-10-19",
+      review_reason: null,
+      created_at: "2026-10-19T00:00:00Z",
+      tier_key: "brl_10",
+      face_value: "10",
+      face_currency: "BRL",
+    },
+  ];
+  render(
+    <RedemptionInventory
+      base={base}
+      permissions={["redemptions.read"]}
+      csrf="csrf"
+      onExpire={() => {}}
+    />,
+  );
+  await screen.findByText("code_claimed");
+  expect(screen.queryByText("标记待核实")).toBeNull();
+  expect(document.body.textContent).not.toContain("兑换码明文");
+  cleanup();
+  render(
+    <RedemptionInventory
+      base={base}
+      permissions={["redemptions.read", "redemptions.review"]}
+      csrf="csrf"
+      onExpire={() => {}}
+    />,
+  );
+  await screen.findByText("标记待核实");
 });
 
 it("keeps rules and import actions independently permissioned", async () => {

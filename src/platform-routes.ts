@@ -180,6 +180,44 @@ export function attachAdminPlatforms(
       return { ok: true };
     });
   });
+  app.post(base + "/platforms/:platformId/redemption-url", async (req) => {
+    none.parse(req.query);
+    const s = scope.extend({ platformId: z.uuid() }).parse(req.params),
+      p = await auth(req);
+    const v = z
+      .object({
+        url: z
+          .url()
+          .refine((value) => value.startsWith("https://"))
+          .nullable(),
+      })
+      .strict()
+      .parse(req.body);
+    return db.transaction(async (tx) => {
+      await authorizePlatformBrand(tx, p, s);
+      await one(
+        tx,
+        "SELECT id FROM platforms WHERE brand_id=$1 AND id=$2 FOR UPDATE",
+        [s.brandId, s.platformId],
+      );
+      await tx.query(
+        "UPDATE platforms SET redemption_url=$3,updated_at=now() WHERE brand_id=$1 AND id=$2",
+        [s.brandId, s.platformId, v.url],
+      );
+      await tx.query(
+        `INSERT INTO audit_logs(admin_id,brand_id,action,object_type,object_id,request_id,after_data)
+       VALUES($1,$2,'platform.redemption_url','platform',$3,$4,$5)`,
+        [
+          p.adminId,
+          s.brandId,
+          s.platformId,
+          req.id,
+          JSON.stringify({ configured: v.url !== null }),
+        ],
+      );
+      return { ok: true };
+    });
+  });
   app.get(base + "/platform-identities", async (req) => {
     const s = scope.parse(req.params),
       p = await auth(req);

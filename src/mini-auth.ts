@@ -3,6 +3,8 @@ import {attachMiniPlatforms} from './platform-routes.js';
 import {recoverMini,recoveryCookie,readRecoveryCookie,requireRecoveryProtection} from './mini-recovery.js';
 import {verifyInitData} from './telegram-init-data.js';
 import {attachMiniQueries} from './mini-queries.js';
+import {attachMiniRedemptions} from './redemption-flow-routes.js';
+import type {RedemptionCodeVault} from './redemption-vault.js';
 import type {FastifyInstance} from 'fastify';
 import {z} from 'zod';
 import {DomainError,type Database} from './db.js';
@@ -26,7 +28,7 @@ export function miniConfig(env:NodeJS.ProcessEnv):MiniConfig|undefined {
 }
 const exchangeBody=z.object({appKey:z.string().max(64),initData:z.string().min(1).max(16384),recovery:z.boolean().optional()}).strict();
 const empty=z.object({}).strict();
-export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretProvider,config:MiniConfig) {
+export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretProvider,config:MiniConfig,vault?:RedemptionCodeVault) {
  validateMiniConfig(config);
  app.addHook('onRequest',async(req,reply)=>{
   reply.header('Cache-Control','no-store').header('Vary','Origin').header('X-Content-Type-Options','nosniff');
@@ -45,7 +47,7 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
   }
  });
  // Explicit preflight routes: no catch-all business API or administrator exemption.
- for(const url of ['/auth/exchange','/me','/auth/logout','/auth/recover','/platforms','/platform-identities']) app.options(url,async()=>({}));
+ for(const url of ['/auth/exchange','/me','/auth/logout','/auth/recover','/platforms','/platform-identities','/redemption-tiers','/redemption-orders','/redemption-orders/:id/claim','/redemption-orders/:id/code']) app.options(url,async()=>({}));
  app.post('/auth/exchange',{bodyLimit:20000},async(req,reply)=>{
   empty.parse(req.query);const body=exchangeBody.parse(req.body);
   const binding=config.bindings.find(b=>b.appKey===body.appKey);
@@ -72,6 +74,7 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
  attachMiniQueries(app,db,config.bindings);
  attachMiniMembers(app,db,config.bindings);
  attachMiniPlatforms(app,db,config.bindings);
+ attachMiniRedemptions(app,db,config.bindings,vault);
  app.get('/me',async req=>{
   empty.parse(req.query);
   const p=await authenticateMini(db,req.headers.authorization,config.bindings,req.headers.origin);

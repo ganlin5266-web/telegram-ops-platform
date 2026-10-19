@@ -8,10 +8,12 @@ GRANT INSERT ON telegram_users,telegram_updates,point_accounts,point_ledger,refe
 GRANT UPDATE(username,first_name,last_name,telegram_language_code,first_started_at,last_interaction_at,updated_at) ON telegram_users TO telegram_app;
 -- Required for SELECT FOR UPDATE. Identity updates still cannot cross FK boundaries.
 GRANT UPDATE(id) ON telegram_bots TO telegram_app;
-GRANT UPDATE ON redemptions TO telegram_app;
+REVOKE UPDATE ON redemptions FROM telegram_app;
+GRANT UPDATE(status,failure_reason,updated_at,code_assigned_at,code_claimed_at,
+ refunded_at,review_reason,reviewed_by,reviewed_at) ON redemptions TO telegram_app;
 -- Reservation/disable transitions only. Encrypted payload, fingerprint, scope,
 -- batch and expiry metadata stay owner/insert-only after creation.
-GRANT UPDATE(status,redemption_id,assigned_at) ON redemption_codes TO telegram_app;
+GRANT UPDATE(status,redemption_id,assigned_at,claimed_at) ON redemption_codes TO telegram_app;
 GRANT UPDATE(id) ON point_accounts TO telegram_app;
 GRANT UPDATE(id) ON redemption_rules TO telegram_app;
 -- No DELETE, TRUNCATE, schema DDL, role management or direct balance writes granted.
@@ -25,7 +27,7 @@ GRANT UPDATE(revoked_at,revoke_reason) ON mini_sessions TO telegram_app;
 GRANT SELECT,INSERT,UPDATE ON mini_auth_limits TO telegram_app;
 -- P3: no UID/scope/history overwrites, deletes or existing business privilege expansion.
 GRANT SELECT,INSERT ON platforms,platform_identities TO telegram_app;
-GRANT UPDATE(status,updated_at) ON platforms TO telegram_app;
+GRANT UPDATE(status,updated_at,redemption_url) ON platforms TO telegram_app;
 GRANT UPDATE(status,verified_at,verified_by,rejected_at,rejected_by,revoked_at,revoked_by,reason_code,evidence_reference) ON platform_identities TO telegram_app;
 
 -- P4: immutable source/revisions; only explicit activation and current pointers are mutable.
@@ -67,3 +69,6 @@ GRANT UPDATE(qualified_count,rewarded_count,updated_at) ON referral_reward_daily
 GRANT SELECT,INSERT ON redemption_code_batches TO telegram_app;
 GRANT INSERT ON redemption_rules,redemption_codes TO telegram_app;
 GRANT UPDATE(status,enabled,published_by,published_at,disabled_by,disabled_at) ON redemption_rules TO telegram_app;
+
+-- Batch 2C: redemption orders use existing tables, Points Ledger/Lots and audit.
+-- Platform URL is mutable only through the permission-checked admin route.

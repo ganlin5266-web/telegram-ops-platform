@@ -1,14 +1,16 @@
 import {readFile} from 'node:fs/promises';
 import {test,before,after} from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID,createHmac} from 'node:crypto';
+import {randomUUID,createHmac,randomBytes} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import {postgres,one,DomainError,type Database,type Queryable} from '../src/db.js';
 import {migrate} from '../src/migrations.js';
 import {createApp} from '../src/app.js';
 import {postPoints} from '../src/points.js';
 import {miniDigest} from '../src/mini-sessions.js';
+import {createRedemptionCodeVault} from '../src/redemption-vault.js';
 let db:Database,close:()=>Promise<void>;const apps:ReturnType<typeof createApp>[]=[];
+const redemptionVault=createRedemptionCodeVault({REDEMPTION_CODE_ENCRYPTION_KEY:randomBytes(32).toString('base64'),REDEMPTION_CODE_FINGERPRINT_KEY:randomBytes(32).toString('base64'),REDEMPTION_CODE_KEY_VERSION:'mini-test'})!;
 const adapt=(p:any):Queryable=>({query:async(s,a)=>a===undefined?(await p.exec(s)).at(-1)??{rows:[]}:p.query(s,a)});
 before(async()=>{if(process.env.TEST_DATABASE_URL){const p=postgres(process.env.TEST_DATABASE_URL);db=p;close=p.close;}else{const p=new PGlite();db={...adapt(p),transaction:f=>p.transaction(t=>f(adapt(t)))};close=()=>p.close();}await migrate(db);});
 after(async()=>{await Promise.all(apps.map(a=>a.close()));await close();});
@@ -23,7 +25,7 @@ async function fixture(runtime=false){
   await db.query(await readFile('db/runtime-grants.sql','utf8'));
   connection={query:(sql,params)=>db.transaction(async tx=>{await tx.query('SET LOCAL ROLE telegram_app');return tx.query(sql,params);}),transaction:fn=>db.transaction(async tx=>{await tx.query('SET LOCAL ROLE telegram_app');return fn(tx);})};
  }
- const app=createApp(connection,r=>r===ref?secret:undefined,async()=>{throw new DomainError('unauthorized',401);},undefined,{bindings:[binding]});apps.push(app);
+ const app=createApp(connection,r=>r===ref?secret:undefined,async()=>{throw new DomainError('unauthorized',401);},undefined,{bindings:[binding]},redemptionVault);apps.push(app);
  const signed=(id=121,date=Math.floor(Date.now()/1000))=>{const p=new URLSearchParams({auth_date:String(date),query_id:randomUUID(),user:JSON.stringify({id,first_name:'Private Name'})});p.sort();p.set('hash',createHmac('sha256',createHmac('sha256','WebAppData').update(secret).digest()).update([...p].map(([k,v])=>`${k}=${v}`).join('\n')).digest('hex'));return p.toString();};
  const exchange=(raw=signed(),recovery=true)=>app.inject({method:'POST',url:'/v1/mini/auth/exchange',headers:{origin,'x-mini-csrf':'1'},payload:{appKey:binding.appKey,initData:raw,recovery}});
  const recover=(cookie:string,raw:string,extra:Record<string,string>={})=>app.inject({method:'POST',url:'/v1/mini/auth/recover',headers:{origin,'x-mini-csrf':'1',cookie,...extra},payload:{appKey:binding.appKey,initData:raw}});
@@ -103,6 +105,26 @@ test('V1 redemption read exposes own status/cost only, never rule secrets or ano
  const rule=await one(db,"INSERT INTO redemption_rules(brand_id,bot_id,name,mode,points_cost,exchange_rate) VALUES($1,$2,'Test','fixed',10,1) RETURNING id",[f.brand.id,f.bot.id]);
  await db.query("INSERT INTO redemptions(brand_id,bot_id,user_id,rule_id,points_cost,idempotency_key,rule_snapshot,failure_reason) VALUES($1,$2,$3,$4,10,$5,$6,'PRIVATE_FAILURE')",[f.brand.id,f.bot.id,uid,rule.id,randomUUID(),JSON.stringify({private:'PRIVATE_SNAPSHOT'})]);
  const r=await f.get(a,'redemptions');assert.equal(r.json().items[0].points_cost,'10');assert.equal(r.json().items[0].status,'pending');assert.ok(!r.body.includes('PRIVATE_'));assert.equal((await f.get(b,'redemptions')).json().items.length,0);
+});
+test('Batch 2C Mini API atomically creates, claims and safely re-reads one fixed redemption',async()=>{
+ const f=await fixture(),token=(await f.exchange()).json().token,userId=(await f.get(token,'me')).json().userId;
+ const admin=await one(db,"INSERT INTO admins(auth_subject,display_name) VALUES($1,'B2C') RETURNING id",[randomUUID()]);
+ const level=await one(db,`INSERT INTO member_rule_versions(brand_id,kind,version,status,effective_from,effective_until,config,created_by) VALUES($1,'level',1,'draft','2020-01-01','2099-12-31',$2,$3) RETURNING id`,[f.brand.id,JSON.stringify({levels:[{key:'level_1',name:'Starter',threshold:0}],grandfather:true}),admin.id]);
+ await db.query("UPDATE member_rule_versions SET status='published',published_by=$2,published_at=now() WHERE id=$1",[level.id,admin.id]);
+ const user=await one(db,'SELECT telegram_user_id FROM telegram_users WHERE id=$1',[userId]);
+ const member=await one(db,'INSERT INTO members(brand_id,telegram_user_id,level,level_rule_id) VALUES($1,$2,1,$3) RETURNING id',[f.brand.id,user.telegram_user_id,level.id]);
+ await db.query('INSERT INTO member_user_links(brand_id,bot_id,user_id,member_id,telegram_user_id) VALUES($1,$2,$3,$4,$5)',[f.brand.id,f.bot.id,userId,member.id,user.telegram_user_id]);
+ const platform=await one(db,`INSERT INTO platforms(brand_id,code,display_name,market,timezone,currency,verification_method,redemption_url) VALUES($1,$2,'FUN66','BR','America/Sao_Paulo','BRL','manual_admin','https://example.test/redeem') RETURNING id`,[f.brand.id,`M${randomUUID().replaceAll('-','').slice(0,8).toUpperCase()}`]);
+ const rule=await one(db,`INSERT INTO redemption_rules(brand_id,bot_id,platform_id,tier_key,version,status,name,mode,points_cost,exchange_rate,daily_count_limit,daily_points_limit,requires_deposit,review_mode,enabled,conditions,face_value,face_currency,effective_from,created_by,published_by,published_at) VALUES($1,$2,$3,'mini',1,'published','Mini','fixed',100,1,1,300,false,'automatic',true,'{}',10,'BRL','2020-01-01',$4,$4,now()) RETURNING id`,[f.brand.id,f.bot.id,platform.id,admin.id]);
+ const enc=redemptionVault.encrypt('MINI-SAFE-CODE',platform.id);
+ await db.query(`INSERT INTO redemption_codes(brand_id,bot_id,platform_id,rule_id,code_secret_ref,code_fingerprint,code_ciphertext,code_iv,code_auth_tag,code_key_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[f.brand.id,f.bot.id,platform.id,rule.id,randomUUID(),enc.fingerprint,enc.ciphertext,enc.iv,enc.authTag,enc.keyVersion]);
+ await db.transaction(tx=>postPoints(tx,{brandId:f.brand.id,botId:f.bot.id,userId,delta:'200',source:'test',businessType:'test',businessId:randomUUID(),idempotencyKey:randomUUID()}));
+ assert.equal((await f.get(token,'redemption-tiers')).json().items[0].available,1);
+ const headers={origin,authorization:`Bearer ${token}`,'x-mini-csrf':'1','idempotency-key':randomUUID()};
+ const created=await f.app.inject({method:'POST',url:'/v1/mini/redemption-orders',headers,payload:{ruleId:rule.id}});assert.equal(created.statusCode,200,created.body);
+ const claimed=await f.app.inject({method:'POST',url:`/v1/mini/redemption-orders/${created.json().id}/claim`,headers:{origin,authorization:`Bearer ${token}`,'x-mini-csrf':'1'},payload:{}});assert.equal(claimed.statusCode,200,claimed.body);assert.equal(claimed.json().code,'MINI-SAFE-CODE');
+ const recovered=await f.get(token,`redemption-orders/${created.json().id}/code`);assert.equal(recovered.json().code,'MINI-SAFE-CODE');
+ assert.ok(!JSON.stringify((await f.get(token,'redemptions')).json()).includes('MINI-SAFE-CODE'));
 });
 test('V1 same-brand second Bot cannot read first Bot records or reuse its recovery cookie',async()=>{
  const f=await fixture(),raw=f.signed(),r=await f.exchange(raw),a=r.json().token;

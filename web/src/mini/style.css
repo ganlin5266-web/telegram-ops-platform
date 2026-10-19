@@ -22,6 +22,31 @@ button:disabled {
   opacity: 0.5;
   cursor: wait;
 }
+.redemption-tier,
+.redemption-code {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+  border-top: 1px solid #dfe6dc;
+}
+.redemption-tier div,
+.redemption-code {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.redemption-code strong {
+  font:
+    700 20px/1.3 ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.redemption-code a {
+  color: inherit;
+  font-weight: 650;
+}
 .mini-shell {
   max-width: 560px;
   margin: auto;

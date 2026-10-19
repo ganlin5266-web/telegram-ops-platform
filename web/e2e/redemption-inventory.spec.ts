@@ -4,6 +4,7 @@ test("Batch 2B admin keeps inventory safe and reports duplicate imports", async 
   page,
 }) => {
   const requests: string[] = [];
+  let reviewRequests = 0;
   await page.route("**/v1/**", async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -42,6 +43,7 @@ test("Batch 2B admin keeps inventory safe and reports duplicate imports", async 
           "redemptions.read",
           "redemptions.inventory.manage",
           "redemptions.rules.manage",
+          "redemptions.review",
           "platforms.read",
         ],
         grants: [],
@@ -94,6 +96,29 @@ test("Batch 2B admin keeps inventory safe and reports duplicate imports", async 
         ],
       };
     else if (
+      path.endsWith("/redemptions/order-1/review") &&
+      request.method() === "POST"
+    ) {
+      reviewRequests++;
+      data = { id: "order-1", status: "review_required" };
+    } else if (path.endsWith("/redemptions"))
+      data = {
+        items: [
+          {
+            id: "order-1",
+            platform_id: "platform-1",
+            points_cost: "100",
+            status: "code_claimed",
+            business_date: "2026-10-19",
+            review_reason: null,
+            created_at: "2026-10-19T00:00:00Z",
+            tier_key: "brl_10",
+            face_value: "10",
+            face_currency: "BRL",
+          },
+        ],
+      };
+    else if (
       path.endsWith("/redemption-code-batches") &&
       request.method() === "POST"
     ) {
@@ -130,6 +155,17 @@ test("Batch 2B admin keeps inventory safe and reports duplicate imports", async 
   );
   await expect(page.getByText("PRIVATE-A")).toHaveCount(0);
   expect(requests).toHaveLength(1);
+  await page
+    .getByRole("dialog", { name: "批量导入兑换码" })
+    .getByRole("button", { name: "关闭" })
+    .click();
+  await expect(page.getByRole("cell", { name: "code_claimed" })).toBeVisible();
+  await page.getByRole("button", { name: "标记待核实" }).click();
+  await expect(page.getByText("订单已进入人工核实。")).toBeVisible();
+  expect(reviewRequests).toBe(1);
+  await expect(page.locator("body")).not.toContainText(
+    /PRIVATE-CODE|code_secret/,
+  );
 });
 
 test("Batch 2B admin does not request inventory without permission", async ({

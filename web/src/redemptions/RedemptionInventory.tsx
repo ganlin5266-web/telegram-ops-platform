@@ -47,6 +47,18 @@ type ImportResult = Pick<
   Batch,
   "status" | "total_count" | "imported_count" | "duplicate_count"
 >;
+type Order = {
+  id: string;
+  platform_id: string;
+  points_cost: string;
+  status: string;
+  business_date: string;
+  review_reason: string | null;
+  created_at: string;
+  tier_key: string;
+  face_value: string;
+  face_currency: string;
+};
 type Preview = {
   readonly: true;
   writes: 0;
@@ -97,11 +109,13 @@ export default function RedemptionInventory({
   const canRead = permissions.includes("redemptions.read");
   const canRules = permissions.includes("redemptions.rules.manage");
   const canInventory = permissions.includes("redemptions.inventory.manage");
+  const canReview = permissions.includes("redemptions.review");
   const canPlatforms = permissions.includes("platforms.read");
   const [rules, setRules] = useState<Rule[]>([]);
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -122,19 +136,22 @@ export default function RedemptionInventory({
   }
 
   async function load() {
-    const [ruleData, stockData, batchData, platformData] = await Promise.all([
-      request<{ items: Rule[] }>(base + "/redemption-rules"),
-      request<{ items: InventoryRow[] }>(base + "/redemption-inventory"),
-      request<{ items: Batch[] }>(base + "/redemption-code-batches"),
-      canPlatforms
-        ? request<{ items: Platform[] }>(base + "/platforms")
-        : Promise.resolve({ items: [] as Platform[] }),
-    ]);
+    const [ruleData, stockData, batchData, platformData, orderData] =
+      await Promise.all([
+        request<{ items: Rule[] }>(base + "/redemption-rules"),
+        request<{ items: InventoryRow[] }>(base + "/redemption-inventory"),
+        request<{ items: Batch[] }>(base + "/redemption-code-batches"),
+        canPlatforms
+          ? request<{ items: Platform[] }>(base + "/platforms")
+          : Promise.resolve({ items: [] as Platform[] }),
+        request<{ items: Order[] }>(base + "/redemptions"),
+      ]);
     if (!live.current) return;
     setRules(ruleData.items);
     setInventory(stockData.items);
     setBatches(batchData.items);
     setPlatforms(platformData.items);
+    setOrders(orderData.items);
     setRuleId((old) =>
       ruleData.items.some((r) => r.id === old && r.status === "published")
         ? old
@@ -243,6 +260,25 @@ export default function RedemptionInventory({
       await request(base + `/redemption-rules/${id}/${action}`, json({}, csrf));
       if (live.current)
         setNotice(action === "publish" ? "档位已发布。" : "档位已停用。");
+      await load();
+    });
+  }
+
+  async function reviewOrder(
+    id: string,
+    action: "mark_review" | "refund",
+    reason: string,
+  ) {
+    await run(async () => {
+      await request(
+        base + `/redemptions/${id}/review`,
+        json({ action, reason }, csrf),
+      );
+      setNotice(
+        action === "refund"
+          ? "退款已确认，订单额度已释放。"
+          : "订单已进入人工核实。",
+      );
       await load();
     });
   }
@@ -449,6 +485,82 @@ export default function RedemptionInventory({
                   <td>{batch.total_count}</td>
                   <td>{batch.imported_count}</td>
                   <td>{batch.duplicate_count}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <h3>兑换订单</h3>
+      {!orders.length ? (
+        <p className="empty">暂无兑换订单。</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>时间</th>
+                <th>平台 / 档位</th>
+                <th>业务日</th>
+                <th>Points</th>
+                <th>状态</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map((order) => (
+                <tr key={order.id}>
+                  <td>{safeDate(order.created_at)}</td>
+                  <td>
+                    {platformName(order.platform_id)} / {order.tier_key}
+                    <small className="muted">
+                      {" "}
+                      · {order.face_value} {order.face_currency}
+                    </small>
+                  </td>
+                  <td>{order.business_date}</td>
+                  <td>{order.points_cost}</td>
+                  <td>
+                    {order.status}
+                    {order.review_reason ? ` · ${order.review_reason}` : ""}
+                  </td>
+                  <td>
+                    {canReview &&
+                      ["code_assigned", "code_claimed"].includes(
+                        order.status,
+                      ) && (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void reviewOrder(
+                              order.id,
+                              "mark_review",
+                              "platform_rejected",
+                            )
+                          }
+                        >
+                          标记待核实
+                        </button>
+                      )}{" "}
+                    {canReview && order.status === "review_required" && (
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          window.confirm(
+                            "仅确认内部失败时退款；平台拒码不得退款。确认继续？",
+                          ) &&
+                          void reviewOrder(
+                            order.id,
+                            "refund",
+                            "confirmed_internal_failure",
+                          )
+                        }
+                      >
+                        确认内部失败并退款
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -6,6 +6,7 @@ import type {RedemptionCodeVault} from './redemption-vault.js';
 import {
  batchInput,changeRedemptionRule,createRedemptionRule,importCodeBatch,ruleInput
 } from './redemption-v2.js';
+import {listAdminRedemptions,reviewRedemption} from './redemption-flow.js';
 
 const scope=z.object({brandId:z.uuid(),botId:z.uuid()});
 const none=z.object({}).strict();
@@ -124,5 +125,20 @@ export function attachAdminRedemptions(
    );
    return {ok:true};
   });
+ });
+
+ app.get(base+'/redemptions',async request=>{
+  none.parse(request.query);
+  return listAdminRedemptions(db,await auth(request),scope.parse(request.params));
+ });
+
+ app.post(base+'/redemptions/:id/review',async request=>{
+  none.parse(request.query);
+  const s=scope.extend({id:z.uuid()}).parse(request.params);
+  const body=z.object({
+   action:z.enum(['mark_review','refund']),
+   reason:z.enum(['platform_rejected','user_reported_code_issue','internal_failure_unknown','confirmed_internal_failure'])
+  }).strict().parse(request.body);
+  return reviewRedemption(db,await auth(request),s,s.id,body.action,body.reason,request.id);
  });
 }

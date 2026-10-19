@@ -85,6 +85,31 @@ export type Row = {
   points_cost?: string;
 };
 export type Page = { items: Row[]; nextCursor: string | null };
+export type RedemptionTier = {
+  id: string;
+  platform_id: string;
+  tier_key: string;
+  name: string;
+  points_cost: string;
+  face_value: string;
+  face_currency: string;
+  display_name: string;
+  redemption_url: string | null;
+  available: number;
+};
+export type RedemptionReveal = {
+  id: string;
+  status: string;
+  code: string;
+  pointsCost: string;
+  platformId: string;
+  tierKey: string;
+  faceValue: string;
+  faceCurrency: string;
+  redemptionUrl: string | null;
+  businessDate: string;
+  claimedAt: string | null;
+};
 import { miniBrand } from "./brand";
 const APP_KEY = miniBrand.appKey;
 export function createClient(send: typeof fetch = fetch) {
@@ -224,6 +249,26 @@ export function createClient(send: typeof fetch = fetch) {
         "/member/growth" + (after ? "?after=" + encodeURIComponent(after) : ""),
       ),
     memberCheckin: () => call("/member/checkin", "POST", {}),
+    redemptionTiers: () =>
+      call("/redemption-tiers") as Promise<{ items: RedemptionTier[] }>,
+    createRedemption: (ruleId: string, key: string) =>
+      call("/redemption-orders", "POST", { ruleId }, token, false, {
+        "X-Mini-CSRF": "1",
+        "Idempotency-Key": key,
+      }) as Promise<{ id: string; status: string; points_cost: string }>,
+    claimRedemption: (id: string) =>
+      call(
+        `/redemption-orders/${encodeURIComponent(id)}/claim`,
+        "POST",
+        {},
+        token,
+        false,
+        { "X-Mini-CSRF": "1" },
+      ) as Promise<RedemptionReveal>,
+    redemptionCode: (id: string) =>
+      call(
+        `/redemption-orders/${encodeURIComponent(id)}/code`,
+      ) as Promise<RedemptionReveal>,
     home: () => call("/home") as Promise<Home>,
     page: (
       kind: "point-ledger" | "referrals" | "redemptions",

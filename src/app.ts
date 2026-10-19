@@ -40,7 +40,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
   const header=request.headers['x-telegram-bot-api-secret-token'];
   return handleUpdate(db,botId,typeof header==='string'?header:undefined,request.body,secrets);
  });
- if(miniAuth) app.register(async mini=>attachMiniAuth(mini,db,secrets,miniAuth),{prefix:'/v1/mini'});
+ if(miniAuth) app.register(async mini=>attachMiniAuth(mini,db,secrets,miniAuth,redemptionVault),{prefix:'/v1/mini'});
  // Encapsulation keeps every existing admin route and hook in the same boundary.
  app.register(async app=>{
  const sessionAuthenticate=browserAuth?attachBrowserAuth(app,db,browserAuth):undefined;

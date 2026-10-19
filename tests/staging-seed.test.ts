@@ -108,9 +108,9 @@ test('seed rejects a conflicting secret ref or foreign Brand association',()=>fi
  assert.deepEqual(await counts(raw),{brands:1,bots:1,audits:2});
 }));
 
-test('seed migration guard strictly accepts only ordered 001-015 and rejects missing, duplicate, future or tampered evidence',()=>fixture(async(_db,raw)=>{
+test('seed migration guard strictly accepts only ordered 001-016 and rejects missing, duplicate, future or tampered evidence',()=>fixture(async(_db,raw)=>{
  const rows=(await raw.query('SELECT name,checksum FROM schema_migrations ORDER BY name')).rows;
- assert.equal(rows.length,15);const first=rows[0]!,second=rows[1]!,last=rows[14]!;assert.equal(last.name,'015_batch2b_redemptions.sql');
+ assert.equal(rows.length,16);const first=rows[0]!,second=rows[1]!,last=rows[15]!;assert.equal(last.name,'016_batch2c_redemption_flow.sql');
  const reader=(evidence:typeof rows):Queryable=>({query:async()=>({rows:evidence}) as any});
  await verifyMigrations(reader(rows));
  for(const bad of [rows.slice(0,-1),[...rows,last],[...rows.slice(0,-1),first],[second,first,...rows.slice(2)],[...rows,{name:'014_unapproved.sql',checksum:'unapproved'}]]) {

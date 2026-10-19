@@ -28,6 +28,7 @@ vi.mock("../src/mini/client", async (original) => ({
     connected: true,
     home: async () => fixture,
     page: async () => ({ items: [], nextCursor: null }),
+    redemptionTiers: async () => ({ items: [] }),
     forget: () => {},
     logout: async () => {},
   }),
@@ -75,7 +76,7 @@ describe("Mini product presentation", () => {
     expect(
       (screen.getByRole("button", { name: /兑换中心/ }) as HTMLButtonElement)
         .disabled,
-    ).toBe(true);
+    ).toBe(false);
     await u.click(
       screen.getByRole("button", { name: "我的兑换", exact: true }),
     );

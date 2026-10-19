@@ -101,4 +101,62 @@ describe("Mini V1 client", () => {
     });
     expect(send).not.toHaveBeenCalled();
   });
+  it("creates and claims once with CSRF and idempotency, then safely recovers the same code", async () => {
+    const send = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(reply({ token, tokenType: "Bearer" }))
+      .mockResolvedValueOnce(
+        reply({
+          id: "11111111-1111-4111-8111-111111111111",
+          status: "code_assigned",
+          points_cost: "100",
+        }),
+      )
+      .mockResolvedValueOnce(
+        reply({
+          id: "11111111-1111-4111-8111-111111111111",
+          status: "code_claimed",
+          code: "SAFE-CODE",
+        }),
+      )
+      .mockResolvedValueOnce(
+        reply({
+          id: "11111111-1111-4111-8111-111111111111",
+          status: "code_claimed",
+          code: "SAFE-CODE",
+        }),
+      );
+    const c = createClient(send);
+    await c.connect("synthetic");
+    const order = await c.createRedemption(
+      "22222222-2222-4222-8222-222222222222",
+      "33333333-3333-4333-8333-333333333333",
+    );
+    const claimed = await c.claimRedemption(order.id),
+      recovered = await c.redemptionCode(order.id);
+    expect(claimed.code).toBe("SAFE-CODE");
+    expect(recovered.code).toBe("SAFE-CODE");
+    expect(send.mock.calls[1][1]?.headers).toMatchObject({
+      "X-Mini-CSRF": "1",
+      "Idempotency-Key": "33333333-3333-4333-8333-333333333333",
+    });
+    expect(send.mock.calls[2][1]?.headers).toMatchObject({
+      "X-Mini-CSRF": "1",
+    });
+  });
+  it("never automatically retries a failed redemption POST", async () => {
+    const send = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(reply({ token, tokenType: "Bearer" }))
+      .mockRejectedValueOnce(new TypeError("network"));
+    const c = createClient(send);
+    await c.connect("synthetic");
+    await expect(
+      c.createRedemption(
+        "22222222-2222-4222-8222-222222222222",
+        "33333333-3333-4333-8333-333333333333",
+      ),
+    ).rejects.toMatchObject({ kind: "network" });
+    expect(send).toHaveBeenCalledTimes(2);
+  });
 });

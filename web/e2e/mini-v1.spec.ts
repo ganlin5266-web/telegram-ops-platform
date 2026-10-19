@@ -12,7 +12,9 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
   let connected = false,
     revoked = false,
     exchanges = 0,
-    recoveries = 0;
+    recoveries = 0,
+    redemptionCreates = 0,
+    redemptionClaims = 0;
   const token = "c".repeat(64);
   await page.route("**/v1/mini/**", async (route) => {
     const p = new URL(route.request().url()).pathname;
@@ -56,6 +58,45 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
           activities: { participationEnabled: false },
         },
       });
+    if (p.endsWith("/redemption-tiers"))
+      return route.fulfill({
+        json: {
+          items: [
+            {
+              id: "11111111-1111-4111-8111-111111111111",
+              platform_id: "22222222-2222-4222-8222-222222222222",
+              tier_key: "brl_10",
+              name: "BRL 10",
+              points_cost: "100",
+              face_value: "10",
+              face_currency: "BRL",
+              display_name: "FUN66",
+              redemption_url: "https://example.test/redeem",
+              available: 1,
+            },
+          ],
+        },
+      });
+    if (
+      p.endsWith("/redemption-orders") &&
+      route.request().method() === "POST"
+    ) {
+      redemptionCreates++;
+      return route.fulfill({
+        json: { id: "order-1", status: "code_assigned", points_cost: "100" },
+      });
+    }
+    if (p.endsWith("/redemption-orders/order-1/claim")) {
+      redemptionClaims++;
+      return route.fulfill({
+        json: {
+          id: "order-1",
+          status: "code_claimed",
+          code: "SAFE-CODE-ONE",
+          redemptionUrl: "https://example.test/redeem",
+        },
+      });
+    }
     return route.fulfill({ json: { items: [], nextCursor: null } });
   });
   await page.goto("/mini.html");
@@ -138,6 +179,15 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
       await expect(page.getByText("还没有积分记录")).toBeVisible();
       await page.getByRole("button", { name: "我的兑换", exact: true }).click();
       await expect(page.getByText("还没有兑换记录")).toBeVisible();
+      await expect(page.getByText(/FUN66/)).toBeVisible();
+      page.once("dialog", (dialog) => dialog.accept());
+      await page.getByRole("button", { name: "立即兑换" }).click();
+      await expect(page.getByText("SAFE-CODE-ONE")).toBeVisible();
+      await expect(
+        page.getByRole("link", { name: "前往游戏平台" }),
+      ).toHaveAttribute("href", "https://example.test/redeem");
+      expect(redemptionCreates).toBe(1);
+      expect(redemptionClaims).toBe(1);
     }
     if (tab === "邀请") {
       await expect(page.getByText("还没有邀请记录")).toBeVisible();

@@ -9,6 +9,7 @@ type Platform = {
   currency: string;
   status: string;
   verification_method: string;
+  redemption_url: string | null;
 };
 type Identity = {
   id: string;
@@ -290,28 +291,49 @@ export default function PlatformCenter({
                   <td>{p.verification_method}</td>
                   <td>
                     {canManage && (
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          void run(async () => {
-                            await request(
-                              base + "/platforms/" + p.id + "/status",
-                              json(
-                                {
-                                  status:
-                                    p.status === "active"
-                                      ? "disabled"
-                                      : "active",
-                                },
-                                csrf,
-                              ),
+                      <>
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void run(async () => {
+                              await request(
+                                base + "/platforms/" + p.id + "/status",
+                                json(
+                                  {
+                                    status:
+                                      p.status === "active"
+                                        ? "disabled"
+                                        : "active",
+                                  },
+                                  csrf,
+                                ),
+                              );
+                              await load();
+                            })
+                          }
+                        >
+                          {p.status === "active" ? "停用" : "启用"}
+                        </button>{" "}
+                        <button
+                          disabled={busy}
+                          onClick={() => {
+                            const value = window.prompt(
+                              "游戏平台兑换页 HTTPS 地址；留空可清除",
+                              p.redemption_url ?? "",
                             );
-                            await load();
-                          })
-                        }
-                      >
-                        {p.status === "active" ? "停用" : "启用"}
-                      </button>
+                            if (value === null) return;
+                            void run(async () => {
+                              await request(
+                                base + "/platforms/" + p.id + "/redemption-url",
+                                json({ url: value.trim() || null }, csrf),
+                              );
+                              await load();
+                            });
+                          }}
+                        >
+                          {p.redemption_url ? "修改兑换跳转" : "配置兑换跳转"}
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
