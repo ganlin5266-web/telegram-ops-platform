@@ -11,6 +11,9 @@ GRANT UPDATE(id) ON telegram_bots TO telegram_app;
 GRANT UPDATE ON redemptions TO telegram_app;
 -- Reservation/disable transitions only. Encrypted payload, fingerprint, scope,
 -- batch and expiry metadata stay owner/insert-only after creation.
+-- Existing Staging installations previously granted table-wide UPDATE. Column
+-- grants do not narrow an existing table grant, so revoke it explicitly first.
+REVOKE UPDATE ON redemption_codes FROM telegram_app;
 GRANT UPDATE(status,redemption_id,assigned_at) ON redemption_codes TO telegram_app;
 GRANT UPDATE(id) ON point_accounts TO telegram_app;
 GRANT UPDATE(id) ON redemption_rules TO telegram_app;

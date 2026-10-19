@@ -42,7 +42,9 @@ Points, Lots, or Growth records and starts no worker or historical scan.
 After Migration 015, apply only the reviewed runtime grants. They allow rule and
 batch inserts plus narrow lifecycle updates. The runtime role cannot update
 ciphertext, authentication tags, fingerprints, scope, batch, key version, or
-expiry; it also cannot delete or truncate inventory.
+expiry; it also cannot delete or truncate inventory. The grant script first
+revokes the legacy table-wide `redemption_codes` UPDATE privilege because a new
+column-level grant does not implicitly narrow an existing grant.
 
 ## Key configuration and rotation
 

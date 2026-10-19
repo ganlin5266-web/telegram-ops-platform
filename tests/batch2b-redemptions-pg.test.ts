@@ -349,6 +349,9 @@ test(
       `CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS`,
     );
     try {
+      // Reproduce the pre-Batch-2B Staging grant. A column-level GRANT alone
+      // would leave this wider table privilege in force.
+      await db.query(`GRANT UPDATE ON redemption_codes TO ${role}`);
       await db.query(
         (await readFile("db/runtime-grants.sql", "utf8")).replaceAll(
           "telegram_app",
