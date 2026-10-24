@@ -5,7 +5,6 @@ import {z} from 'zod';
 import {one,type Database} from './db.js';
 import {authenticateMini,type MiniAppBinding,type MiniPrincipal} from './mini-sessions.js';
 import {binding,decodeCursor,encodeCursor} from './query-cursor.js';
-import {referralRewardsEnabled} from './referral-rewards.js';
 const pageSchema=z.object({cursor:z.string().max(2048).optional(),limit:z.coerce.number().int().min(1).max(50).default(20)}).strict();
 const noQuery=z.object({}).strict();
 export function telegramReferralDeepLink(username:unknown,code:unknown) {
@@ -39,15 +38,9 @@ export function attachMiniQueries(app:FastifyInstance,db:Database,bindings:MiniA
     WHERE r.brand_id=$1 AND r.bot_id=$2 AND r.inviter_id=$3 AND q.status IN ('verified','cap_exceeded')
       AND q.business_date=(clock_timestamp() AT TIME ZONE platform.timezone)::date) AS qualified_today,
    (SELECT coalesce(sum(points),0)::text FROM referral_reward_events
-    WHERE brand_id=$1 AND bot_id=$2 AND recipient_user_id=$3 AND status='granted') AS points_earned,
-   EXISTS(SELECT 1 FROM referral_reward_rule_versions rule JOIN platforms platform
-      ON (platform.brand_id,platform.id)=(rule.brand_id,rule.platform_id)
-    WHERE rule.brand_id=$1 AND rule.status='published' AND platform.status='active'
-      AND rule.effective_from <= (clock_timestamp() AT TIME ZONE platform.timezone)::date
-      AND (rule.effective_until IS NULL OR rule.effective_until >= (clock_timestamp() AT TIME ZONE platform.timezone)::date)) AS active_rule`,
+    WHERE brand_id=$1 AND bot_id=$2 AND recipient_user_id=$3 AND status='granted') AS points_earned`,
    [p.brandId,p.botId,p.userId]);
-  const shareUrl=referralRewardsEnabled()&&referral.active_rule
-   ?telegramReferralDeepLink(profile.bot_username,profile.referral_code):null;
+  const shareUrl=telegramReferralDeepLink(profile.bot_username,profile.referral_code);
   return {member:await miniMemberSummary(db,p),profile:{displayName:[profile.first_name,profile.last_name].filter(Boolean).join(' ')||'',projectName:profile.project_name,botName:profile.bot_name,uiLanguage:'zh-CN',preferredLanguage:profile.preferred_language,botLanguage:profile.bot_language,projectLanguage:profile.project_language,telegramLanguage:profile.telegram_language_code},points:await points(p),invitedCount:totals.invited,redemptionCount:totals.redemptions,activities:activities(),referral:{qualifiedToday:referral.qualified_today,qualifiedTotal:referral.qualified_total,pointsEarned:referral.points_earned,shareUrl}};
  });
  app.get('/points',async req=>{noQuery.parse(req.query);return points(await auth(req));});

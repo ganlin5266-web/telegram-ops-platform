@@ -9,6 +9,7 @@ import {createApp} from '../src/app.js';
 import {postPoints} from '../src/points.js';
 import {miniDigest} from '../src/mini-sessions.js';
 import {createRedemptionCodeVault} from '../src/redemption-vault.js';
+import {handleUpdate} from '../src/telegram.js';
 let db:Database,close:()=>Promise<void>;const apps:ReturnType<typeof createApp>[]=[];
 const redemptionVault=createRedemptionCodeVault({REDEMPTION_CODE_ENCRYPTION_KEY:randomBytes(32).toString('base64'),REDEMPTION_CODE_FINGERPRINT_KEY:randomBytes(32).toString('base64'),REDEMPTION_CODE_KEY_VERSION:'mini-test'})!;
 const adapt=(p:any):Queryable=>({query:async(s,a)=>a===undefined?(await p.exec(s)).at(-1)??{rows:[]}:p.query(s,a)});
@@ -31,7 +32,7 @@ async function fixture(runtime=false){
  const exchange=(raw=signed(),recovery=true)=>app.inject({method:'POST',url:'/v1/mini/auth/exchange',headers:{origin,'x-mini-csrf':'1'},payload:{appKey:binding.appKey,initData:raw,recovery}});
  const recover=(cookie:string,raw:string,extra:Record<string,string>={})=>app.inject({method:'POST',url:'/v1/mini/auth/recover',headers:{origin,'x-mini-csrf':'1',cookie,...extra},payload:{appKey:binding.appKey,initData:raw}});
  const get=(token:string,url:string)=>app.inject({url:'/v1/mini/'+url,headers:{authorization:`Bearer ${token}`,origin}});
- return {brand,bot,app,binding,signed,exchange,recover,get};
+ return {brand,bot,app,binding,secret,signed,exchange,recover,get};
 }
 test('V1 recovery: strict cookie, same session, refresh, logout and old recovery cannot restore',async()=>{
  const f=await fixture(),raw=f.signed(),first=await f.exchange(raw);assert.equal(first.statusCode,200);const cookie=String(first.headers['set-cookie']).split(';')[0]!;
@@ -78,24 +79,27 @@ test('V1 queries: own scope, bigint precision, pagination, no business creation,
  await db.query("INSERT INTO referrals(brand_id,bot_id,inviter_id,invitee_id,start_parameter) VALUES($1,$2,$3,$4,'test')",[f.brand.id,f.bot.id,aId,bId]);
  assert.equal((await f.get(a,'referrals')).json().items.length,1);assert.equal((await f.get(b,'referrals')).json().items.length,0);
 });
-test('Batch 3 Mini invite link is current Bot scoped and fail-closed until rule and reward gate are active',async()=>{
+test('Batch 3 reward gate off still shares and binds current Bot referral without rewards',async()=>{
  const f=await fixture(),token=(await f.exchange()).json().token,user=(await f.get(token,'me')).json();
  const stored=await one(db,'SELECT referral_code FROM telegram_users WHERE id=$1',[user.userId]);
- const platform=await one(db,`INSERT INTO platforms(brand_id,code,display_name,market,timezone,currency,verification_method) VALUES($1,$2,'Invite','BR','America/Sao_Paulo','BRL','manual_admin') RETURNING id`,[f.brand.id,`I${randomUUID().replaceAll('-','').slice(0,8).toUpperCase()}`]);
- const admin=await one(db,"INSERT INTO admins(auth_subject,display_name) VALUES($1,'Invite Admin') RETURNING id",[randomUUID()]);
- const rule=await one(db,`INSERT INTO referral_reward_rule_versions(brand_id,platform_id,campaign_key,version,effective_from,effective_until,created_by)
-  VALUES($1,$2,'BATCH3',1,'2020-01-01',NULL,$3) RETURNING id`,[f.brand.id,platform.id,admin.id]);
- await db.query("UPDATE referral_reward_rule_versions SET status='published',published_at=now(),published_by=$2 WHERE id=$1",[rule.id,admin.id]);
- delete process.env.BATCH2A_REFERRAL_REWARDS_ENABLED;
- assert.equal((await f.get(token,'home')).json().referral.shareUrl,null);
- process.env.BATCH2A_REFERRAL_REWARDS_ENABLED='true';
+ process.env.BATCH2A_REFERRAL_REWARDS_ENABLED='false';
  try {
   const home=(await f.get(token,'home')).json();
   assert.equal(home.referral.shareUrl,`https://t.me/${f.bot.username}?start=ref_${stored.referral_code}`);
   assert.equal(home.referral.qualifiedToday,'0');assert.equal(home.referral.qualifiedTotal,'0');assert.equal(home.referral.pointsEarned,'0');
   assert.ok(!JSON.stringify(home).includes(f.brand.id));
+  const start=new URL(home.referral.shareUrl).searchParams.get('start');
+  await handleUpdate(db,f.bot.id,f.secret,{update_id:1,message:{from:{id:987654321,first_name:'Invitee'},text:`/start ${start}`}},()=>f.secret);
+  const referral=await one(db,'SELECT r.*,u.telegram_user_id::text AS invitee_telegram_id FROM referrals r JOIN telegram_users u ON u.id=r.invitee_id WHERE r.brand_id=$1 AND r.bot_id=$2 AND r.inviter_id=$3',[f.brand.id,f.bot.id,user.userId]);
+  assert.equal(referral.start_parameter,start);assert.equal(referral.invitee_telegram_id,'987654321');
+  assert.equal((await one(db,'SELECT count(*)::int AS n FROM referral_reward_events WHERE brand_id=$1',[f.brand.id])).n,0);
+  assert.equal((await one(db,'SELECT count(*)::int AS n FROM referral_qualification_evidence WHERE brand_id=$1',[f.brand.id])).n,0);
+  assert.equal((await one(db,'SELECT count(*)::int AS n FROM point_ledger WHERE brand_id=$1',[f.brand.id])).n,0);
+  assert.equal((await one(db,'SELECT count(*)::int AS n FROM point_lots WHERE brand_id=$1',[f.brand.id])).n,0);
   const other=await fixture(),otherToken=(await other.exchange()).json().token;
-  assert.equal((await other.get(otherToken,'home')).json().referral.shareUrl,null);
+  const otherHome=(await other.get(otherToken,'home')).json();
+  assert.match(otherHome.referral.shareUrl,new RegExp(`^https://t\\.me/${other.bot.username}\\?start=ref_`));
+  assert.ok(!otherHome.referral.shareUrl.includes(f.bot.username));
  } finally { delete process.env.BATCH2A_REFERRAL_REWARDS_ENABLED; }
 });
 test('V1 limits: shared proxy/forged forwarding metadata cannot consume valid users budget',async()=>{
