@@ -6,7 +6,7 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
   await page.route("https://telegram.org/js/telegram-web-app.js", (r) =>
     r.fulfill({
       contentType: "application/javascript",
-      body: 'window.Telegram={WebApp:{initData:"synthetic-browser-only",ready(){}}};',
+      body: 'window.Telegram={WebApp:{initData:"synthetic-browser-only",ready(){},openTelegramLink(u){window.__inviteLink=u}}};',
     }),
   );
   let connected = false,
@@ -56,6 +56,12 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
           invitedCount: "0",
           redemptionCount: "0",
           activities: { participationEnabled: false },
+          referral: {
+            qualifiedToday: "0",
+            qualifiedTotal: "0",
+            pointsEarned: "0",
+            shareUrl: "https://t.me/P1TestBot?start=ref_SAFE_CURRENT_BOT",
+          },
         },
       });
     if (p.endsWith("/redemption-tiers"))
@@ -191,7 +197,13 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     }
     if (tab === "邀请") {
       await expect(page.getByText("还没有邀请记录")).toBeVisible();
-      await expect(page.getByText("规则尚未发布")).toBeVisible();
+      await expect(
+        page.getByRole("button", { name: "分享给好友" }),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "分享给好友" }).click();
+      expect(await page.evaluate(() => (window as any).__inviteLink)).toContain(
+        "https://t.me/share/url?url=https%3A%2F%2Ft.me%2FP1TestBot%3Fstart%3Dref_SAFE_CURRENT_BOT",
+      );
     }
   }
   await expect(page.locator("body")).not.toContainText("Brand ID");

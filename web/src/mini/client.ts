@@ -40,6 +40,8 @@ export type ReferralSummary = {
   qualifiedToday?: string;
   dailyRewardLimit?: string;
   qualifiedTotal?: string;
+  pointsEarned?: string;
+  /** Legacy optional field kept for an older presentation contract. */
   growthEarned?: string;
   remainingRewardChances?: string;
   shareUrl?: string | null;

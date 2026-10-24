@@ -150,7 +150,7 @@ describe("Phase 2 retention", () => {
           referral: {
             qualifiedToday: "3",
             dailyRewardLimit: "5",
-            growthEarned: "150",
+            pointsEarned: "150",
             remainingRewardChances: "2",
             qualifiedTotal: "3",
             shareUrl: "https://t.me/bot?start=ref",
@@ -172,7 +172,14 @@ describe("Phase 2 retention", () => {
     const hero = await screen.findByTestId("invite-hero");
     expect(hero.textContent).toContain("3 / 5");
     expect(hero.textContent).toContain("150");
-    expect(within(hero).getByRole("button", { name: "邀请好友" })).toBeTruthy();
+    expect(
+      within(hero).getByRole("button", { name: "分享给好友" }),
+    ).toBeTruthy();
+    await u.click(within(hero).getByRole("button", { name: "复制邀请链接" }));
+    expect(await navigator.clipboard.readText()).toBe(
+      "https://t.me/bot?start=ref",
+    );
+    expect(within(hero).getByText("邀请链接已复制")).toBeTruthy();
     await screen.findByText("好友 1");
     expect(screen.getByText("已绑定")).toBeTruthy();
     expect(screen.getByText("已奖励")).toBeTruthy();

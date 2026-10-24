@@ -17,7 +17,8 @@ after(async()=>{await Promise.all(apps.map(a=>a.close()));await close();});
 const origin='https://mini-v1.example.test';
 async function fixture(runtime=false){
  const brand=await one(db,"INSERT INTO brands(name,slug,default_language) VALUES('P2 Synthetic',$1,'en') RETURNING id",[randomUUID()]);const ref='P2_'+randomUUID().replaceAll('-','').toUpperCase();
- const bot=await one(db,"INSERT INTO telegram_bots(brand_id,name,username,token_secret_ref,webhook_secret_ref,default_language,supported_languages,status) VALUES($1,'P2 Bot',$2,$3,$4,'en',ARRAY['en'],'active') RETURNING id",[brand.id,randomUUID(),ref,randomUUID()]);
+ const botUsername=`bot_${randomUUID().replaceAll('-','')}`;
+ const bot=await one(db,"INSERT INTO telegram_bots(brand_id,name,username,token_secret_ref,webhook_secret_ref,default_language,supported_languages,status) VALUES($1,'P2 Bot',$2,$3,$4,'en',ARRAY['en'],'active') RETURNING id,username",[brand.id,botUsername,ref,randomUUID()]);
  const secret=randomUUID(),binding={appKey:'p2-'+randomUUID(),botId:bot.id,origin,tokenSecretRef:ref};
  let connection=db;
  if(runtime){
@@ -76,6 +77,26 @@ test('V1 queries: own scope, bigint precision, pagination, no business creation,
  const other=await fixture();assert.equal((await other.get(a,'home')).statusCode,401);
  await db.query("INSERT INTO referrals(brand_id,bot_id,inviter_id,invitee_id,start_parameter) VALUES($1,$2,$3,$4,'test')",[f.brand.id,f.bot.id,aId,bId]);
  assert.equal((await f.get(a,'referrals')).json().items.length,1);assert.equal((await f.get(b,'referrals')).json().items.length,0);
+});
+test('Batch 3 Mini invite link is current Bot scoped and fail-closed until rule and reward gate are active',async()=>{
+ const f=await fixture(),token=(await f.exchange()).json().token,user=(await f.get(token,'me')).json();
+ const stored=await one(db,'SELECT referral_code FROM telegram_users WHERE id=$1',[user.userId]);
+ const platform=await one(db,`INSERT INTO platforms(brand_id,code,display_name,market,timezone,currency,verification_method) VALUES($1,$2,'Invite','BR','America/Sao_Paulo','BRL','manual_admin') RETURNING id`,[f.brand.id,`I${randomUUID().replaceAll('-','').slice(0,8).toUpperCase()}`]);
+ const admin=await one(db,"INSERT INTO admins(auth_subject,display_name) VALUES($1,'Invite Admin') RETURNING id",[randomUUID()]);
+ const rule=await one(db,`INSERT INTO referral_reward_rule_versions(brand_id,platform_id,campaign_key,version,effective_from,effective_until,created_by)
+  VALUES($1,$2,'BATCH3',1,'2020-01-01',NULL,$3) RETURNING id`,[f.brand.id,platform.id,admin.id]);
+ await db.query("UPDATE referral_reward_rule_versions SET status='published',published_at=now(),published_by=$2 WHERE id=$1",[rule.id,admin.id]);
+ delete process.env.BATCH2A_REFERRAL_REWARDS_ENABLED;
+ assert.equal((await f.get(token,'home')).json().referral.shareUrl,null);
+ process.env.BATCH2A_REFERRAL_REWARDS_ENABLED='true';
+ try {
+  const home=(await f.get(token,'home')).json();
+  assert.equal(home.referral.shareUrl,`https://t.me/${f.bot.username}?start=ref_${stored.referral_code}`);
+  assert.equal(home.referral.qualifiedToday,'0');assert.equal(home.referral.qualifiedTotal,'0');assert.equal(home.referral.pointsEarned,'0');
+  assert.ok(!JSON.stringify(home).includes(f.brand.id));
+  const other=await fixture(),otherToken=(await other.exchange()).json().token;
+  assert.equal((await other.get(otherToken,'home')).json().referral.shareUrl,null);
+ } finally { delete process.env.BATCH2A_REFERRAL_REWARDS_ENABLED; }
 });
 test('V1 limits: shared proxy/forged forwarding metadata cannot consume valid users budget',async()=>{
  const f=await fixture();for(let i=0;i<52;i++)await f.exchange('bad');

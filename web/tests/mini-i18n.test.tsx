@@ -33,6 +33,10 @@ describe("Mini presentation locale", () => {
       for (const key of Object.keys(zh))
         expect(translate(locale, key)).not.toMatch(/undefined|^translation\./);
     expect(translate("pt-BR", "home")).toBe("Home");
+    expect(translate("pt-BR", "inviteShare")).toBe("Compartilhar com amigos");
+    expect(translate("pt-BR", "p2PointsEarned")).toBe(
+      "Points ganhos com convites",
+    );
     expect(translate("en", "home")).toBe("Home");
     expect(translate("zh-CN", "unknown.key")).toBe("Content is being prepared");
     expect(normalizeLocale("fil-PH")).toBe("fil");

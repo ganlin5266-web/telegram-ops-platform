@@ -23,6 +23,7 @@ import { ApiError, json, operation, request, type Operation } from "./api";
 import PlatformCenter from "./platforms/PlatformCenter";
 import UsersCenter from "./operations/UsersCenter";
 import RedemptionInventory from "./redemptions/RedemptionInventory";
+import ReferralCampaigns from "./referrals/ReferralCampaigns";
 import {
   UserOverview,
   PointSummary,
@@ -506,6 +507,7 @@ export default function App() {
                     "point-expiry": "积分有效期",
                     entitlements: "会员权益",
                     redemptions: "兑换档位与库存",
+                    activities: "邀请活动",
                     "daily-data": "平台数据 · 用户日报",
                     identities: "UID绑定审核",
                   }[page]
@@ -651,6 +653,15 @@ export default function App() {
             page === "games" ? (
             page === "membership" ? (
               <MemberAdmin brandId={brand} csrf={me.csrfToken} />
+            ) : page === "activities" && bot && !loading && !scopeError ? (
+              <ReferralCampaigns
+                key={brand + bot}
+                brandBase={`/v1/brands/${brand}`}
+                botBase={base}
+                permissions={permissions}
+                csrf={me.csrfToken}
+                onExpire={expire}
+              />
             ) : (
               <ProductSpace kind={page} />
             )

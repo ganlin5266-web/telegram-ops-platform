@@ -1208,3 +1208,13 @@ details > summary {
     font-size: 24px;
   }
 }
+.referral-campaigns .check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.referral-campaigns .check-row input {
+  width: auto;
+  margin: 0;
+}

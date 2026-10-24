@@ -1456,3 +1456,16 @@ main > :last-child {
 .steps5 li {
   margin-bottom: 4px;
 }
+.invite-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.invite-actions .secondary {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+.invite-actions small {
+  flex-basis: 100%;
+}

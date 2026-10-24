@@ -336,9 +336,14 @@ export function InviteJourney({
   more: () => void;
 }) {
   const r = home.referral;
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  const earned = r?.pointsEarned ?? r?.growthEarned;
   const hasStats =
     isInt(r?.qualifiedToday) ||
-    isInt(r?.growthEarned) ||
+    isInt(earned) ||
+    isInt(r?.qualifiedTotal) ||
     isInt(r?.remainingRewardChances);
   const share = () => {
     const url = r?.shareUrl;
@@ -348,6 +353,16 @@ export function InviteJourney({
       { openTelegramLink?: (u: string) => void } | undefined;
     if (tg?.openTelegramLink) tg.openTelegramLink(link);
     else window.open(link, "_blank", "noopener");
+  };
+  const copy = async () => {
+    const url = r?.shareUrl;
+    if (!url || !/^https:\/\//.test(url)) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
   };
   const canShare = !!r?.shareUrl && /^https:\/\//.test(r.shareUrl);
   return (
@@ -367,10 +382,12 @@ export function InviteJourney({
                 </strong>
               </div>
             )}
-            {isInt(r?.growthEarned) && (
+            {isInt(earned) && (
               <div>
-                <small>{t("p2GrowthEarned")}</small>
-                <strong>{formatPoints(r!.growthEarned!, locale)}</strong>
+                <small>
+                  {r?.pointsEarned ? t("p2PointsEarned") : t("p2GrowthEarned")}
+                </small>
+                <strong>{formatPoints(earned, locale)}</strong>
               </div>
             )}
             {isInt(r?.remainingRewardChances) && (
@@ -388,7 +405,15 @@ export function InviteJourney({
           </p>
         )}
         {canShare ? (
-          <button onClick={share}>{t("actionInvite")}</button>
+          <div className="invite-actions">
+            <button onClick={share}>{t("inviteShare")}</button>
+            <button className="secondary" onClick={() => void copy()}>
+              {copyState === "copied" ? t("inviteCopied") : t("inviteCopy")}
+            </button>
+            {copyState === "failed" && (
+              <small role="alert">{t("inviteCopyFailed")}</small>
+            )}
+          </div>
         ) : (
           <button disabled>{t("p2ShareSoon")}</button>
         )}
