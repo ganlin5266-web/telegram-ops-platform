@@ -1,7 +1,7 @@
 import {attachMiniMembers} from './member-routes.js';
 import {attachMiniPlatforms} from './platform-routes.js';
 import {recoverMini,recoveryCookie,readRecoveryCookie,requireRecoveryProtection} from './mini-recovery.js';
-import {verifyInitData} from './telegram-init-data.js';
+import {miniInitDataFailureReason,verifyInitData} from './telegram-init-data.js';
 import {attachMiniQueries} from './mini-queries.js';
 import {attachMiniRedemptions} from './redemption-flow-routes.js';
 import type {RedemptionCodeVault} from './redemption-vault.js';
@@ -31,13 +31,22 @@ export function miniConfig(env:NodeJS.ProcessEnv):MiniConfig|undefined {
 // recovery session is the authority for the binding.
 const exchangeBody=z.object({appKey:z.string().max(64).optional(),initData:z.string().min(1).max(16384),recovery:z.boolean().optional()}).strict();
 const empty=z.object({}).strict();
-function signedBinding(config:MiniConfig,secrets:SecretProvider,origin:string,initData:string) {
- const matches=config.bindings.filter(binding=>binding.origin===origin).filter(binding=>{
-  const secret=secrets(binding.tokenSecretRef);if(!secret) return false;
-  try {verifyInitData(initData,secret);return true;} catch {return false;}
- });
- return matches.length===1?matches[0]:undefined;
+type SignedBindingResult={binding?:MiniAppBinding;reason:'matched'|'origin_not_configured'|'secret_missing'|'init_data_rejected'|'ambiguous';candidateCount:number;failures:Record<string,number>};
+function signedBinding(config:MiniConfig,secrets:SecretProvider,origin:string,initData:string):SignedBindingResult {
+ const candidates=config.bindings.filter(binding=>binding.origin===origin),matches:MiniAppBinding[]=[];
+ const failures:Record<string,number>={};let missing=0;
+ for(const binding of candidates) {
+  const secret=secrets(binding.tokenSecretRef);if(!secret) {missing++;continue;}
+  try {verifyInitData(initData,secret);matches.push(binding);}
+  catch(error) {const reason=miniInitDataFailureReason(error)??'rejected';failures[reason]=(failures[reason]??0)+1;}
+ }
+ if(matches.length===1) return {binding:matches[0],reason:'matched',candidateCount:candidates.length,failures};
+ if(matches.length>1) return {reason:'ambiguous',candidateCount:candidates.length,failures};
+ if(candidates.length===0) return {reason:'origin_not_configured',candidateCount:0,failures};
+ if(missing===candidates.length) return {reason:'secret_missing',candidateCount:candidates.length,failures};
+ return {reason:'init_data_rejected',candidateCount:candidates.length,failures};
 }
+const safeDomainReason=(error:unknown)=>error instanceof DomainError&&['mini_invalid_identity','mini_init_data_used','mini_unauthorized','mini_rate_limited','not_found'].includes(error.code)?error.code:'rejected';
 export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretProvider,config:MiniConfig,vault?:RedemptionCodeVault) {
  validateMiniConfig(config);
  app.addHook('onRequest',async(req,reply)=>{
@@ -61,8 +70,10 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
  app.post('/auth/exchange',{bodyLimit:20000},async(req,reply)=>{
   empty.parse(req.query);const body=exchangeBody.parse(req.body);
   const origin=req.headers.origin;
-  const binding=origin?signedBinding(config,secrets,origin,body.initData):undefined;
+  const resolved=origin?signedBinding(config,secrets,origin,body.initData):{reason:'origin_not_configured' as const,candidateCount:0,failures:{}};
+  const binding=resolved.binding;
   if(!binding) {
+   req.log.warn({requestId:req.id,stage:'signed_binding',reason:resolved.reason,candidateCount:resolved.candidateCount,failures:resolved.failures},'mini_auth_denied');
    // A legacy selector may partition denial counters, but never selects the
    // authenticated Bot or changes the authorization result.
    const hinted=config.bindings.find(b=>b.origin===origin&&b.appKey===body.appKey);
@@ -70,7 +81,9 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
   }
   const secret=secrets(binding.tokenSecretRef);if(!secret) throw miniUnauthorized();
   if(body.recovery) requireRecoveryProtection(req.headers);
-  const session=await exchangeMiniSession(db,binding,body.initData,secret,req.id);
+  let session;
+  try {session=await exchangeMiniSession(db,binding,body.initData,secret,req.id);}
+  catch(error) {req.log.warn({requestId:req.id,stage:'session_exchange',reason:safeDomainReason(error)},'mini_auth_denied');throw error;}
   if(body.recovery) reply.header('Set-Cookie',recoveryCookie(session.token));
   return reply.send(session);
  });
@@ -85,7 +98,7 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
    const secret=secrets(binding.tokenSecretRef);if(!secret) throw miniUnauthorized();
    return await recoverMini(db,token,binding,body.initData,secret,binding.origin,req.id);
   }
-  catch(error) {reply.header('Set-Cookie',recoveryCookie('',0));throw error;}
+  catch(error) {req.log.warn({requestId:req.id,stage:'session_recovery',reason:safeDomainReason(error)},'mini_auth_denied');reply.header('Set-Cookie',recoveryCookie('',0));throw error;}
  });
  attachMiniQueries(app,db,config.bindings);
  attachMiniMembers(app,db,config.bindings);

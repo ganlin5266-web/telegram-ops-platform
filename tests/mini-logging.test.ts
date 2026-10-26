@@ -17,5 +17,6 @@ test('mini: actual logger excludes headers, initData, credentials and raw databa
  const r=spawnSync(process.execPath,['--import','tsx','--input-type=module','-e',code],{encoding:'utf8'});
  assert.equal(r.status,0,r.stderr);const logs=r.stdout+r.stderr;
  assert.match(logs,/request_failed/);
+ assert.match(logs,/mini_auth_denied/);assert.match(logs,/signed_binding/);assert.match(logs,/init_data_rejected/);
  assert.doesNotMatch(logs,/RAW_ERROR_CANARY|SECRET_CANARY|AUTH_CANARY|AUTH_HEADER_CANARY|COOKIE_CANARY|CSRF_CANARY|INITDATA_CANARY/);
 });

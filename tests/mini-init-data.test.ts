@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {createHmac,randomBytes,randomUUID} from 'node:crypto';
-import {verifyInitData} from '../src/telegram-init-data.js';
+import {miniInitDataFailureReason,verifyInitData} from '../src/telegram-init-data.js';
 import {miniConfig,validateMiniConfig} from '../src/mini-auth.js';
 const secret=randomBytes(32).toString('hex'),now=1800000000;
 // Independent signer uses URLSearchParams sorting, not the verifier implementation.
@@ -39,6 +39,14 @@ for(const [label,raw] of [
 ] as const) test(`mini verifier rejects ${label}`,()=>assert.throws(()=>verifyInitData(raw,secret,now),/mini_invalid_identity/));
 test('mini verifier rejects wrong Bot secret and empty secret',()=>{
  assert.throws(()=>verifyInitData(sign(fields),'wrong',now));assert.throws(()=>verifyInitData(sign(fields),'',now));
+});
+test('mini verifier exposes safe diagnostic reasons without input material',()=>{
+ const reason=(raw:string,key=secret)=>{try {verifyInitData(raw,key,now);return undefined;} catch(error) {return miniInitDataFailureReason(error);}};
+ assert.equal(reason(sign(fields),'wrong'),'hash_mismatch');
+ assert.equal(reason(sign({...fields,auth_date:String(now-300)})),'expired_auth_date');
+ assert.equal(reason(sign({...fields,auth_date:String(now+31)})),'future_auth_date');
+ const signedWithoutSignature=sign(fields),withUnsignedSignature=signedWithoutSignature.replace('&hash=','&signature=telegram-ed25519&hash=');
+ assert.equal(reason(withUnsignedSignature),'hash_matches_without_signature');
 });
 test('mini verifier freshness boundaries and optional signature HMAC coverage',()=>{
  verifyInitData(sign({...fields,auth_date:String(now-299)}),secret,now);
