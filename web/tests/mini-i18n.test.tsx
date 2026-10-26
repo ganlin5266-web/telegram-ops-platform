@@ -37,6 +37,13 @@ describe("Mini presentation locale", () => {
     expect(translate("pt-BR", "p2PointsEarned")).toBe(
       "Points ganhos com convites",
     );
+    expect(translate("pt-BR", "rules")).toBe("Regras do convite");
+    expect(translate("pt-BR", "rulesUnpublished")).toBe(
+      "Regras ainda não publicadas",
+    );
+    expect(translate("pt-BR", "journey1")).toBe(
+      "Compartilhe seu link de convite",
+    );
     expect(translate("en", "home")).toBe("Home");
     expect(translate("zh-CN", "unknown.key")).toBe("Content is being prepared");
     expect(normalizeLocale("fil-PH")).toBe("fil");

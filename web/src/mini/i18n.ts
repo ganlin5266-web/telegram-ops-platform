@@ -581,6 +581,9 @@ export const dictionaries: Record<Locale, Partial<Record<Key, string>>> = {
     inviteHint:
       "Depois de compartilhar seu link, acompanhe aqui o progresso dos amigos.",
     inviteHistory: "Histórico de convites",
+    rules: "Regras do convite",
+    rulesUnpublished: "Regras ainda não publicadas",
+    journey1: "Compartilhe seu link de convite",
     invited: "Amigos convidados",
     relation: "Convite",
     bound: "Vinculado",
