@@ -11,6 +11,41 @@ import { postPoints } from "./points.js";
 export const referralRewardsEnabled = () =>
   process.env.BATCH2A_REFERRAL_REWARDS_ENABLED === "true";
 
+const referralRewardScopeSchema = z.object({
+  brandId: z.uuid(),
+  botId: z.uuid(),
+  platformId: z.uuid(),
+}).strict();
+
+type ReferralRewardScope = z.infer<typeof referralRewardScopeSchema>;
+
+const scopeKey = (scope: ReferralRewardScope) =>
+  `${scope.brandId}:${scope.botId}:${scope.platformId}`;
+
+/**
+ * Fail-closed server-side allowlist. A configured entry is one exact
+ * Brand/Bot/Platform tuple; separate ID lists would accidentally allow their
+ * Cartesian product. Invalid, empty, duplicate, or missing JSON disables all
+ * referral reward writes.
+ */
+const referralRewardAllowedScopes = () => {
+  if (!referralRewardsEnabled()) return null;
+  const raw = process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON;
+  if (!raw) return null;
+  try {
+    const parsed = z.array(referralRewardScopeSchema).min(1).max(100).safeParse(JSON.parse(raw));
+    if (!parsed.success) return null;
+    const keys = parsed.data.map(scopeKey);
+    if (new Set(keys).size !== keys.length) return null;
+    return new Set(keys);
+  } catch {
+    return null;
+  }
+};
+
+export const referralRewardScopeEnabled = (scope: ReferralRewardScope) =>
+  referralRewardAllowedScopes()?.has(scopeKey(scope)) === true;
+
 export async function authorizeBrand(tx: Queryable, p: Principal, brandId: string, permission: string) {
   const row = (await tx.query(
     `SELECT a.id FROM admins a JOIN admin_roles ar ON ar.admin_id=a.id
@@ -76,11 +111,17 @@ async function existingOutcome(tx: Queryable, brandId: string, platformId: strin
 
 /** Evaluate one verified platform identity. Caller may already hold the identity lock. */
 export async function evaluateReferralByIdentityTx(tx: Queryable, identityId: string, requestId: string, adminId: string | null = null) {
-  if (!referralRewardsEnabled()) return { status: "disabled" as const };
+  const allowedScopes = referralRewardAllowedScopes();
+  if (!allowedScopes) return { status: "disabled" as const };
   const identity = await one(tx,
     `SELECT i.*,p.uid_case,p.timezone,p.status AS platform_status,p.id AS checked_platform_id
        FROM platform_identities i JOIN platforms p ON p.brand_id=i.brand_id AND p.id=i.platform_id
       WHERE i.id=$1`, [identityId]);
+  if (!allowedScopes.has(scopeKey({
+    brandId: identity.brand_id,
+    botId: identity.bot_id,
+    platformId: identity.platform_id,
+  }))) return { status: "disabled" as const };
   const referral = (await tx.query(
     `SELECT * FROM referrals WHERE brand_id=$1 AND bot_id=$2 AND invitee_id=$3 FOR UPDATE`,
     [identity.brand_id, identity.bot_id, identity.user_id],
@@ -179,7 +220,7 @@ export async function evaluateReferralByIdentityTx(tx: Queryable, identityId: st
 export async function evaluateReferralReward(db: Database, p: Principal, s: Scope, referralId: string, requestId: string) {
   return db.transaction(async (tx) => {
     await authorize(tx, p, s, "referrals.evaluate");
-    if (!referralRewardsEnabled()) return { status: "disabled" as const };
+    if (!referralRewardAllowedScopes()) return { status: "disabled" as const };
     const referral = await one(tx, "SELECT invitee_id FROM referrals WHERE brand_id=$1 AND bot_id=$2 AND id=$3", [s.brandId,s.botId,referralId]);
     const identity = (await tx.query(`SELECT id FROM platform_identities WHERE brand_id=$1 AND bot_id=$2 AND user_id=$3 AND status IN ('verified','conflict','revoked') ORDER BY submitted_at DESC,id DESC LIMIT 1`, [s.brandId,s.botId,referral.invitee_id])).rows[0];
     if (!identity) return { status: "waiting_for_verified_uid" };

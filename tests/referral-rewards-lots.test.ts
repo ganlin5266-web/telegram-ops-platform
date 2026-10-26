@@ -7,6 +7,7 @@ import { one, postgres, type Database, type Queryable } from "../src/db.js";
 import { createPolicy, publishPolicy } from "../src/point-lots.js";
 import { cutoverBot } from "../src/point-lot-maintenance.js";
 import { changeReferralRule, createReferralRule, evaluateReferralByIdentityTx } from "../src/referral-rewards.js";
+import { reviewIdentity } from "../src/platform-identities.js";
 
 let db: Database;
 let close: () => Promise<void>;
@@ -35,11 +36,20 @@ before(async () => {
 
 after(async () => {
   delete process.env.BATCH2A_REFERRAL_REWARDS_ENABLED;
+  delete process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON;
   delete process.env.POINT_LOTS_ENABLED;
   await close();
 });
 
-async function fixture() {
+function allowScope(brandId: string, botId: string, platformId: string) {
+  const existing = JSON.parse(process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON ?? "[]");
+  process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON = JSON.stringify([
+    ...existing,
+    { brandId, botId, platformId },
+  ]);
+}
+
+async function fixture(verified = true) {
   const brand = await one(db, "INSERT INTO brands(name,slug,default_language) VALUES('Lots B2A',$1,'en') RETURNING id", [randomUUID()]);
   const platform = await one(db, "INSERT INTO platforms(brand_id,code,display_name,market,timezone,currency,verification_method) VALUES($1,'LOTS_B2A','Lots B2A','BR','UTC','BRL','manual_admin') RETURNING id", [brand.id]);
   const bot = await one(db, "INSERT INTO telegram_bots(brand_id,name,username,token_secret_ref,webhook_secret_ref,default_language,supported_languages,status) VALUES($1,'Lots B2A',$2,$3,$4,'en',ARRAY['en'],'active') RETURNING id", [brand.id,randomUUID(),randomUUID(),randomUUID()]);
@@ -53,7 +63,8 @@ async function fixture() {
   await db.query("INSERT INTO member_user_links(brand_id,bot_id,user_id,member_id,telegram_user_id) VALUES($1,$2,$3,$4,1)", [brand.id,bot.id,inviter.id,member.id]);
   const referral = await one(db, "INSERT INTO referrals(brand_id,bot_id,inviter_id,invitee_id,start_parameter) VALUES($1,$2,$3,$4,'lots') RETURNING id", [brand.id,bot.id,inviter.id,invitee.id]);
   const identity = await one(db, "INSERT INTO platform_identities(brand_id,bot_id,user_id,telegram_user_id,platform_id,platform_uid,verification_method,submission_key) VALUES($1,$2,$3,2,$4,'LOTS-UID','manual_admin',$5) RETURNING id", [brand.id,bot.id,invitee.id,platform.id,randomUUID()]);
-  await db.query("UPDATE platform_identities SET status='verified',verified_at=now(),verified_by=$2,evidence_reference='CASE-LOTS' WHERE id=$1", [identity.id, admin.id]);
+  if (verified) await db.query("UPDATE platform_identities SET status='verified',verified_at=now(),verified_by=$2,evidence_reference='CASE-LOTS' WHERE id=$1", [identity.id, admin.id]);
+  allowScope(brand.id, bot.id, platform.id);
   await db.transaction((tx) => cutoverBot(tx, { brandId: brand.id, botId: bot.id }));
   await db.transaction(async (tx) => {
     const policy = await createPolicy(tx, { brandId: brand.id, botId: bot.id }, admin.id, { name: "B2A lots", source: "*", mode: "permanent", timezone: "UTC", effectiveAt: new Date(Date.now() - 60000).toISOString() }, "lots-policy");
@@ -62,8 +73,26 @@ async function fixture() {
   const referralRule = await createReferralRule(db, { adminId: admin.id }, brand.id, { platformId: platform.id, campaignKey: "LOTS-B2A", effectiveFrom: "2026-01-01", effectiveUntil: null, inviteeEnabled: true }, "lots-rule");
   await changeReferralRule(db, { adminId: admin.id }, brand.id, referralRule.id, "publish", "lots-rule");
   const scope = { brandId: brand.id, botId: bot.id };
-  return { ...scope, adminId: admin.id, brandId: brand.id, botId: bot.id, inviter: inviter.id, invitee: invitee.id, referral: referral.id, identity: identity.id };
+  return { ...scope, adminId: admin.id, brandId: brand.id, botId: bot.id, platformId: platform.id, inviter: inviter.id, invitee: invitee.id, referral: referral.id, identity: identity.id };
 }
+
+test("verified UID hook uses the same exact-scope gate and never backfills mismatched history", async () => {
+  const mismatched = await fixture(false);
+  process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON = JSON.stringify([{
+    brandId: mismatched.brandId,
+    botId: mismatched.botId,
+    platformId: randomUUID(),
+  }]);
+  await reviewIdentity(db, { adminId: mismatched.adminId }, { brandId: mismatched.brandId, botId: mismatched.botId }, mismatched.identity, { action: "verify", evidenceReference: "CASE-AUTO-MISMATCH" }, randomUUID());
+  assert.equal((await one(db, "SELECT count(*)::int n FROM referral_reward_events WHERE referral_id=$1", [mismatched.referral])).n, 0);
+  allowScope(mismatched.brandId, mismatched.botId, mismatched.platformId);
+  assert.equal((await one(db, "SELECT count(*)::int n FROM referral_reward_events WHERE referral_id=$1", [mismatched.referral])).n, 0);
+
+  const matched = await fixture(false);
+  await reviewIdentity(db, { adminId: matched.adminId }, { brandId: matched.brandId, botId: matched.botId }, matched.identity, { action: "verify", evidenceReference: "CASE-AUTO-MATCH" }, randomUUID());
+  assert.equal((await one(db, "SELECT count(*)::int n FROM referral_reward_events WHERE referral_id=$1", [matched.referral])).n, 2);
+  assert.equal((await one(db, "SELECT count(*)::int n FROM point_ledger WHERE bot_id=$1", [matched.botId])).n, 2);
+});
 
 test("Lots-enabled referral reward is atomically 50/20, idempotent, and rolls back on failure", async (t) => {
   if (!usePg17) t.diagnostic("Run with TEST_DATABASE_URL against isolated PostgreSQL 17 for the required multi-connection acceptance.");

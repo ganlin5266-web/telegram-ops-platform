@@ -21,6 +21,7 @@ before(async () => {
 });
 after(async () => {
   delete process.env.BATCH2A_REFERRAL_REWARDS_ENABLED;
+  delete process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON;
   await close();
 });
 
@@ -28,6 +29,9 @@ test("Batch 2A grants 50/20 atomically and counts invitations separately from le
   const brand = await one(db, "INSERT INTO brands(name,slug,default_language) VALUES('B2A',$1,'en') RETURNING id", [randomUUID()]);
   const platform = await one(db, `INSERT INTO platforms(brand_id,code,display_name,market,timezone,currency,verification_method) VALUES($1,'B2A','B2A','BR','UTC','BRL','manual_admin') RETURNING id`, [brand.id]);
   const bot = await one(db, `INSERT INTO telegram_bots(brand_id,name,username,token_secret_ref,webhook_secret_ref,default_language,supported_languages,status) VALUES($1,'B2A',$2,$3,$4,'en',ARRAY['en'],'active') RETURNING id`, [brand.id,randomUUID(),randomUUID(),randomUUID()]);
+  process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON = JSON.stringify([
+    { brandId: brand.id, botId: bot.id, platformId: platform.id },
+  ]);
   const admin = await one(db, "INSERT INTO admins(auth_subject,display_name) VALUES($1,'B2A') RETURNING id", [randomUUID()]);
   await db.query("INSERT INTO admin_roles(admin_id,role_id,brand_id) SELECT $1,id,$2 FROM roles WHERE name='Super Admin'", [admin.id,brand.id]);
   const rule = await one(db, `INSERT INTO member_rule_versions(brand_id,kind,version,status,effective_from,effective_until,config,created_by) VALUES($1,'level',1,'draft','2026-01-01','2026-12-31',$2,$3) RETURNING id`, [brand.id,JSON.stringify({levels:[{threshold:0},{threshold:500},{threshold:2000},{threshold:6000},{threshold:15000}],grandfather:true}),admin.id]);
@@ -58,6 +62,23 @@ test("Batch 2A grants 50/20 atomically and counts invitations separately from le
   assert.equal((await one(db, "SELECT balance::text FROM point_accounts WHERE user_id=$1", [inviter.id])).balance, "250");
   const duplicate = await db.transaction((tx) => evaluateReferralByIdentityTx(tx, identityIds[0]!, randomUUID()));
   assert.equal(duplicate.status, "already_rewarded");
+  assert.equal((await one(db, "SELECT count(*)::int AS n FROM point_ledger")).n, 10);
+  await db.query("UPDATE platform_identities SET status='revoked',revoked_at=now(),revoked_by=$2,reason_code='user_request' WHERE id=$1", [identityIds[0], admin.id]);
+  const secondBot = await one(db, `INSERT INTO telegram_bots(brand_id,name,username,token_secret_ref,webhook_secret_ref,default_language,supported_languages,status) VALUES($1,'B2A second bot',$2,$3,$4,'en',ARRAY['en'],'active') RETURNING id`, [brand.id,randomUUID(),randomUUID(),randomUUID()]);
+  const secondInviter = await one(db, "INSERT INTO telegram_users(brand_id,bot_id,telegram_user_id) VALUES($1,$2,2001) RETURNING id", [brand.id, secondBot.id]);
+  const secondInvitee = await one(db, "INSERT INTO telegram_users(brand_id,bot_id,telegram_user_id) VALUES($1,$2,2002) RETURNING id", [brand.id, secondBot.id]);
+  const secondMember = await one(db, "INSERT INTO members(brand_id,telegram_user_id,level,level_rule_id) VALUES($1,2001,1,$2) RETURNING id", [brand.id, rule.id]);
+  await db.query("INSERT INTO member_user_links(brand_id,bot_id,user_id,member_id,telegram_user_id) VALUES($1,$2,$3,$4,2001)", [brand.id, secondBot.id, secondInviter.id, secondMember.id]);
+  const secondReferral = await one(db, "INSERT INTO referrals(brand_id,bot_id,inviter_id,invitee_id,start_parameter) VALUES($1,$2,$3,$4,'cross-bot') RETURNING id", [brand.id, secondBot.id, secondInviter.id, secondInvitee.id]);
+  const secondIdentity = await one(db, `INSERT INTO platform_identities(brand_id,bot_id,user_id,telegram_user_id,platform_id,platform_uid,verification_method,submission_key) VALUES($1,$2,$3,2002,$4,'UID0','manual_admin',$5) RETURNING id`, [brand.id, secondBot.id, secondInvitee.id, platform.id, randomUUID()]);
+  await db.query("UPDATE platform_identities SET status='verified',verified_at=now(),verified_by=$2,evidence_reference='CASE-CROSS-BOT' WHERE id=$1", [secondIdentity.id, admin.id]);
+  process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON = JSON.stringify([
+    { brandId: brand.id, botId: bot.id, platformId: platform.id },
+    { brandId: brand.id, botId: secondBot.id, platformId: platform.id },
+  ]);
+  const crossBot = await db.transaction((tx) => evaluateReferralByIdentityTx(tx, secondIdentity.id, randomUUID()));
+  assert.equal(crossBot.status, "manual_review");
+  assert.equal((await one(db, "SELECT count(*)::int AS n FROM referral_reward_events WHERE referral_id=$1", [secondReferral.id])).n, 0);
   assert.equal((await one(db, "SELECT count(*)::int AS n FROM point_ledger")).n, 10);
   await changeReferralRule(db, { adminId: admin.id }, brand.id, rewardRule.id, "disable", randomUUID());
   const disabledUser = await one(db, "INSERT INTO telegram_users(brand_id,bot_id,telegram_user_id) VALUES($1,$2,999) RETURNING id", [brand.id,bot.id]);
