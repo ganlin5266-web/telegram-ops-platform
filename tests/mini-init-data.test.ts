@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createHmac,randomBytes,randomUUID} from 'node:crypto';
+import {createHmac,generateKeyPairSync,randomBytes,randomUUID,sign as signEd25519} from 'node:crypto';
 import {miniInitDataFailureReason,verifyInitData} from '../src/telegram-init-data.js';
 import {miniConfig,validateMiniConfig} from '../src/mini-auth.js';
 const secret=randomBytes(32).toString('hex'),now=1800000000;
@@ -47,6 +47,18 @@ test('mini verifier exposes safe diagnostic reasons without input material',()=>
  assert.equal(reason(sign({...fields,auth_date:String(now+31)})),'future_auth_date');
  const signedWithoutSignature=sign(fields),withUnsignedSignature=signedWithoutSignature.replace('&hash=','&signature=telegram-ed25519&hash=');
  assert.equal(reason(withUnsignedSignature),'hash_matches_without_signature');
+});
+test('mini verifier accepts Telegram third-party Ed25519 proof for the exact Bot id',()=>{
+ const {privateKey,publicKey}=generateKeyPairSync('ed25519'),botId='8843130077',token=`${botId}:synthetic-token`;
+ const params=new URLSearchParams(fields);params.sort();
+ const signatureData=`${botId}:WebAppData\n${Array.from(params,([k,v])=>`${k}=${v}`).join('\n')}`;
+ params.set('signature',signEd25519(null,Buffer.from(signatureData),privateKey).toString('base64url'));
+ params.set('hash','0'.repeat(64));
+ const result=verifyInitData(params.toString(),token,now,publicKey);
+ assert.equal(result.validationMethod,'telegram_signature');
+ assert.throws(()=>verifyInitData(params.toString(),`999999:synthetic-token`,now,publicKey),/mini_invalid_identity/);
+ params.set('query_id','tampered');
+ assert.throws(()=>verifyInitData(params.toString(),token,now,publicKey),/mini_invalid_identity/);
 });
 test('mini verifier freshness boundaries and optional signature HMAC coverage',()=>{
  verifyInitData(sign({...fields,auth_date:String(now-299)}),secret,now);

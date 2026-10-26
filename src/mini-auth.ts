@@ -31,16 +31,17 @@ export function miniConfig(env:NodeJS.ProcessEnv):MiniConfig|undefined {
 // recovery session is the authority for the binding.
 const exchangeBody=z.object({appKey:z.string().max(64).optional(),initData:z.string().min(1).max(16384),recovery:z.boolean().optional()}).strict();
 const empty=z.object({}).strict();
-type SignedBindingResult={binding?:MiniAppBinding;reason:'matched'|'origin_not_configured'|'secret_missing'|'init_data_rejected'|'ambiguous';candidateCount:number;failures:Record<string,number>};
+type SignedBindingResult={binding?:MiniAppBinding;validationMethod?:'hmac'|'telegram_signature';reason:'matched'|'origin_not_configured'|'secret_missing'|'init_data_rejected'|'ambiguous';candidateCount:number;failures:Record<string,number>};
 function signedBinding(config:MiniConfig,secrets:SecretProvider,origin:string,initData:string):SignedBindingResult {
- const candidates=config.bindings.filter(binding=>binding.origin===origin),matches:MiniAppBinding[]=[];
+ const candidates=config.bindings.filter(binding=>binding.origin===origin),matches:{binding:MiniAppBinding;validationMethod:'hmac'|'telegram_signature'}[]=[];
  const failures:Record<string,number>={};let missing=0;
  for(const binding of candidates) {
   const secret=secrets(binding.tokenSecretRef);if(!secret) {missing++;continue;}
-  try {verifyInitData(initData,secret);matches.push(binding);}
+  try {const result=verifyInitData(initData,secret);matches.push({binding,validationMethod:result.validationMethod});}
   catch(error) {const reason=miniInitDataFailureReason(error)??'rejected';failures[reason]=(failures[reason]??0)+1;}
  }
- if(matches.length===1) return {binding:matches[0],reason:'matched',candidateCount:candidates.length,failures};
+ const [match]=matches;
+ if(match&&matches.length===1) return {binding:match.binding,validationMethod:match.validationMethod,reason:'matched',candidateCount:candidates.length,failures};
  if(matches.length>1) return {reason:'ambiguous',candidateCount:candidates.length,failures};
  if(candidates.length===0) return {reason:'origin_not_configured',candidateCount:0,failures};
  if(missing===candidates.length) return {reason:'secret_missing',candidateCount:candidates.length,failures};
@@ -79,6 +80,7 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
    const hinted=config.bindings.find(b=>b.origin===origin&&b.appKey===body.appKey);
    await miniRateLimit(db,`invalid:${hinted?.botId??'unmatched'}:${req.ip}`,50);throw miniUnauthorized();
   }
+  if(resolved.validationMethod==='telegram_signature') req.log.info({requestId:req.id,stage:'signed_binding',validationMethod:resolved.validationMethod},'mini_auth_verified');
   const secret=secrets(binding.tokenSecretRef);if(!secret) throw miniUnauthorized();
   if(body.recovery) requireRecoveryProtection(req.headers);
   let session;
