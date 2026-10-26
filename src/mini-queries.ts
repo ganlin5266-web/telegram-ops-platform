@@ -2,7 +2,7 @@ import {miniMemberSummary} from './member-growth.js';
 import {pointSummary,lotsEnabled} from './point-lots.js';
 import type {FastifyInstance} from 'fastify';
 import {z} from 'zod';
-import {one,type Database} from './db.js';
+import {DomainError,one,type Database} from './db.js';
 import {authenticateMini,type MiniAppBinding,type MiniPrincipal} from './mini-sessions.js';
 import {binding,decodeCursor,encodeCursor} from './query-cursor.js';
 const pageSchema=z.object({cursor:z.string().max(2048).optional(),limit:z.coerce.number().int().min(1).max(50).default(20)}).strict();
@@ -15,8 +15,26 @@ export function telegramReferralDeepLink(username:unknown,code:unknown) {
 export function attachMiniQueries(app:FastifyInstance,db:Database,bindings:MiniAppBinding[]) {
  const auth=(req:any)=>authenticateMini(db,req.headers.authorization,bindings,req.headers.origin);
  const points=async(p:MiniPrincipal)=>{
-  const summary=await pointSummary(db,p);
-  return {accountExists:summary.accountExists,balance:summary.availableBalance,...(lotsEnabled()?{expiringSoon:summary.expiringSoon}:{})};
+  try {
+   const summary=await pointSummary(db,p);
+   return {accountExists:summary.accountExists,balance:summary.availableBalance,...(lotsEnabled()?{expiringSoon:summary.expiringSoon}:{})};
+  } catch(error) {
+   // A new Bot can authenticate before Points is configured. Never manufacture
+   // a zero balance or suppress a missing cutover for an existing account.
+   if(error instanceof DomainError&&error.code==='point_lot_cutover_required'&&
+    !(await db.query('SELECT id FROM point_accounts WHERE brand_id=$1 AND bot_id=$2 AND user_id=$3',[p.brandId,p.botId,p.userId])).rows.length)
+    return {accountExists:false,balance:null};
+   throw error;
+  }
+ };
+ const member=async(p:MiniPrincipal)=>{
+  try {return await miniMemberSummary(db,p);}
+  catch(error) {
+   // Missing local rules must not turn successful login into a failed home.
+   // miniMemberSummary has rolled back; no rules, member or balances are created.
+   if(error instanceof DomainError&&error.code==='member_rule_not_available') return {enabled:true,available:false};
+   throw error;
+  }
  };
  const activities=()=>({items:[],participationEnabled:false,catalogueStatus:'not_published'});
  app.get('/home',async req=>{
@@ -41,7 +59,7 @@ export function attachMiniQueries(app:FastifyInstance,db:Database,bindings:MiniA
     WHERE brand_id=$1 AND bot_id=$2 AND recipient_user_id=$3 AND status='granted') AS points_earned`,
    [p.brandId,p.botId,p.userId]);
   const shareUrl=telegramReferralDeepLink(profile.bot_username,profile.referral_code);
-  return {member:await miniMemberSummary(db,p),profile:{displayName:[profile.first_name,profile.last_name].filter(Boolean).join(' ')||'',projectName:profile.project_name,botName:profile.bot_name,uiLanguage:'zh-CN',preferredLanguage:profile.preferred_language,botLanguage:profile.bot_language,projectLanguage:profile.project_language,telegramLanguage:profile.telegram_language_code},points:await points(p),invitedCount:totals.invited,redemptionCount:totals.redemptions,activities:activities(),referral:{qualifiedToday:referral.qualified_today,qualifiedTotal:referral.qualified_total,pointsEarned:referral.points_earned,shareUrl}};
+  return {member:await member(p),profile:{displayName:[profile.first_name,profile.last_name].filter(Boolean).join(' ')||'',projectName:profile.project_name,botName:profile.bot_name,uiLanguage:'zh-CN',preferredLanguage:profile.preferred_language,botLanguage:profile.bot_language,projectLanguage:profile.project_language,telegramLanguage:profile.telegram_language_code},points:await points(p),invitedCount:totals.invited,redemptionCount:totals.redemptions,activities:activities(),referral:{qualifiedToday:referral.qualified_today,qualifiedTotal:referral.qualified_total,pointsEarned:referral.points_earned,shareUrl}};
  });
  app.get('/points',async req=>{noQuery.parse(req.query);return points(await auth(req));});
  app.get('/activities',async req=>{noQuery.parse(req.query);await auth(req);return activities();});

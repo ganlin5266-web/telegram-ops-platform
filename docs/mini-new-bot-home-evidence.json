@@ -1,0 +1,41 @@
+{
+  "stage": "mini_new_bot_home_readiness",
+  "date": "2026-10-27",
+  "parent_commit": "08cb88e00eb73edf7b8c8f712da20f1d25f469fa",
+  "live_evidence_before_fix": {
+    "telegram_signature_verified": true,
+    "auth_exchange_http": 200,
+    "home_http": 409,
+    "readonly_probe": true,
+    "strict_tls": true,
+    "writes": 0,
+    "session_count": 1,
+    "exchange_count": 1,
+    "test_users_before_and_after": 10,
+    "test_members": 0,
+    "test_member_rules": 0,
+    "test_lot_cutovers": 0,
+    "member_error": "member_rule_not_available",
+    "points_error": "point_lot_cutover_required",
+    "points_account_ledger_lots": ["2640", "2640", "2640"],
+    "growth_account_ledger": ["1205", "1205"],
+    "referral_reward_events": 0
+  },
+  "fix": "Mini read adapter exposes unavailable membership and no account/null balance for a genuinely absent account. Existing accounts missing Lot cutover and unrelated errors remain failures. No core accounting, membership rules, authentication scope, schema, grants or environment changes.",
+  "tests": {
+    "reproduction_before_fix": {"pass": 1, "fail": 1, "skip": 0},
+    "pglite": {"pass": 65, "fail": 0, "skip": 3},
+    "postgresql_170011": {"pass": 68, "fail": 0, "skip": 0},
+    "frontend_auth_recovery": {"pass": 42, "fail": 0, "skip": 0},
+    "browser_synthetic_contract": {"pass": 4, "fail": 0, "skip": 0},
+    "backend_build": "PASS",
+    "frontend_typescript_build": "PASS",
+    "secret_scan_findings": 0,
+    "bundle_scan_findings": 0
+  },
+  "real_telegram_home_after_fix": "PENDING",
+  "evidence_boundary": "Browser tests use isolated synthetic contracts. Real Telegram exchange passed before this change; real homepage and recovery still require post-deploy observation. Original HMAC mismatch cause is not fully established; official Telegram Ed25519 signature verification passed for the server-configured Bot ID.",
+  "rollback_api": "08cb88e00eb73edf7b8c8f712da20f1d25f469fa",
+  "rollback_deploy": "dep-dbfrkh6i0phs73ee63j0",
+  "frontend_unchanged": "72d8fba57fa5eeec8ae8f64498b564eb22bbbdee"
+}

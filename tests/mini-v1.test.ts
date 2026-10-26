@@ -191,3 +191,36 @@ test('P5-A Mini available points remain own-scope and never expose lots or polic
   assert.equal((await f.get(a,'points?userId='+userId)).statusCode,400);
  }finally{delete process.env.POINT_LOTS_ENABLED;}
 });
+test('new Bot home remains available with global Growth/Lots enabled but no local setup, without business writes',async()=>{
+ const f=await fixture(true),raw=f.signed(),exchange=await f.exchange(raw),token=exchange.json().token;
+ const originalGrowth=process.env.MEMBER_GROWTH_ENABLED,originalLots=process.env.POINT_LOTS_ENABLED;
+ process.env.MEMBER_GROWTH_ENABLED='true';process.env.POINT_LOTS_ENABLED='true';
+ try {
+  for(let i=0;i<2;i++) {
+   const response=await f.get(token,'home');assert.equal(response.statusCode,200,response.body);
+   assert.deepEqual(response.json().member,{enabled:true,available:false});
+   assert.deepEqual(response.json().points,{accountExists:false,balance:null});
+   assert.match(response.json().referral.shareUrl,new RegExp(`^https://t\\.me/${f.bot.username}\\?start=ref_`));
+  }
+  const cookie=String(exchange.headers['set-cookie']).split(';')[0]!;
+  assert.equal((await f.recover(cookie,raw)).json().token,token);
+  for(const table of ['members','growth_accounts','growth_ledger','member_level_history','point_accounts','point_ledger','point_lots','referral_reward_events'])
+   assert.equal((await one(db,`SELECT count(*)::int AS n FROM ${table} WHERE brand_id=$1`,[f.brand.id])).n,0,table);
+  assert.equal((await one(db,'SELECT count(*)::int AS n FROM mini_sessions WHERE bot_id=$1',[f.bot.id])).n,1);
+  assert.equal((await one(db,'SELECT count(*)::int AS n FROM mini_auth_exchanges WHERE bot_id=$1',[f.bot.id])).n,1);
+  assert.equal((await f.app.inject({method:'POST',url:'/v1/mini/auth/logout',headers:{origin,authorization:`Bearer ${token}`},payload:{}})).statusCode,200);
+  assert.equal((await f.get(token,'home')).statusCode,401);
+ } finally {
+  if(originalGrowth===undefined)delete process.env.MEMBER_GROWTH_ENABLED;else process.env.MEMBER_GROWTH_ENABLED=originalGrowth;
+  if(originalLots===undefined)delete process.env.POINT_LOTS_ENABLED;else process.env.POINT_LOTS_ENABLED=originalLots;
+ }
+});
+test('Mini never hides an existing Points account missing its required Lot cutover',async()=>{
+ const f=await fixture(),token=(await f.exchange()).json().token,userId=(await f.get(token,'me')).json().userId;
+ await db.transaction(tx=>postPoints(tx,{brandId:f.brand.id,botId:f.bot.id,userId,delta:'50',source:'test',businessType:'test',businessId:randomUUID(),idempotencyKey:randomUUID()}));
+ const original=process.env.POINT_LOTS_ENABLED;process.env.POINT_LOTS_ENABLED='true';
+ try {
+  const result=await f.get(token,'points');assert.equal(result.statusCode,409);assert.equal(result.json().error,'point_lot_cutover_required');
+  assert.equal((await one(db,'SELECT balance::text AS balance FROM point_accounts WHERE user_id=$1',[userId])).balance,'50');
+ } finally {if(original===undefined)delete process.env.POINT_LOTS_ENABLED;else process.env.POINT_LOTS_ENABLED=original;}
+});
