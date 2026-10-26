@@ -5,8 +5,8 @@ referrals, redemption, platform data or P2 functionality is added.
 
 The fixed frontend serves `/p1-mini-test.html`. Open it from the dedicated
 `FUN_Club_Staging_bot` using BotFather's Mini App/menu configuration. The precise
-origin is `https://telegram-ops-admin-staging.onrender.com`; the public selector is
-`p1-staging-auth`. A selector is not a credential. Do not enable the synthetic Bot.
+origin is `https://telegram-ops-admin-staging.onrender.com`. The frontend sends no
+Bot selector; the API identifies the approved binding from the Telegram HMAC.
 
 The page uses the official Telegram Web App SDK and sends raw `WebApp.initData`
 to the existing exchange endpoint for server-side verification. It never uses

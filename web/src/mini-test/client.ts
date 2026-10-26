@@ -1,5 +1,4 @@
 // P1 acceptance only. No admin client, ambient Cookie or persistent token storage.
-export const TEST_APP_KEY = "p1-staging-auth";
 export type MiniIdentity = {
   userId: string;
   brandId: string;
@@ -96,7 +95,6 @@ export function createMiniTestClient(send: typeof fetch = fetch) {
       busy = true;
       try {
         const data = await call("/v1/mini/auth/exchange", "POST", {
-          appKey: TEST_APP_KEY,
           initData,
         });
         if (

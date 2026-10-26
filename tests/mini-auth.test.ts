@@ -79,7 +79,7 @@ test('mini: existing user preserves preferred language, start and status',async(
  for(const status of ['blocked','disabled']) {await db.query('UPDATE telegram_users SET status=$2 WHERE id=$1',[user.id,status]);assert.equal((await f.exchange()).statusCode,401);}
  assert.equal((await counts(f.bot.id)).telegram_users,1);
 });
-for(const reason of ['signature','expired','wrongBot','missingSecret','disabledBot','disabledBrand','wrongRef','unknownApp']) test(`mini: ${reason} fails without identity writes`,async()=>{
+for(const reason of ['signature','expired','wrongBot','missingSecret','disabledBot','disabledBrand','wrongRef']) test(`mini: ${reason} fails without identity writes`,async()=>{
  const f=await fixture();let raw=f.signed(),app=f.app,extra={};
  if(reason==='signature') raw=raw.replace('Synthetic','Modified');
  if(reason==='expired') raw=f.signed(111,{},Math.floor(Date.now()/1000)-301);
@@ -88,7 +88,6 @@ for(const reason of ['signature','expired','wrongBot','missingSecret','disabledB
  if(reason==='disabledBot') await db.query("UPDATE telegram_bots SET status='disabled' WHERE id=$1",[f.bot.id]);
  if(reason==='disabledBrand') await db.query("UPDATE brands SET status='disabled' WHERE id=$1",[f.brand.id]);
  if(reason==='wrongRef') await db.query('UPDATE telegram_bots SET token_secret_ref=$2 WHERE id=$1',[f.bot.id,randomUUID()]);
- if(reason==='unknownApp') extra={appKey:'unknown'};
  assert.equal((await f.exchange(raw,app,extra)).statusCode,401);
  assert.deepEqual(await counts(f.bot.id),{telegram_users:0,mini_sessions:0,mini_auth_exchanges:0,point_accounts:0,referrals:0,telegram_updates:0,audit_logs:0});
 });
@@ -130,7 +129,30 @@ test('mini: exact per-app Origin, CORS, no ambient cookie auth',async()=>{
 test('mini: other configured app Origin cannot use this app session or exchange',async()=>{
  const a=await fixture(),b=await fixture();b.binding.origin='https://other-mini.example.test';a.config.bindings.push(b.binding);
  const token=await login(a);assert.equal((await a.get(token,{origin:b.binding.origin})).statusCode,403);
- const response=await a.app.inject({method:'POST',url:'/v1/mini/auth/exchange',headers:{origin:b.binding.origin},payload:{appKey:a.binding.appKey,initData:a.signed()}});assert.equal(response.statusCode,403);
+ const response=await a.app.inject({method:'POST',url:'/v1/mini/auth/exchange',headers:{origin:b.binding.origin},payload:{appKey:a.binding.appKey,initData:a.signed()}});assert.equal(response.statusCode,401);
+});
+test('mini: same-origin multi-Bot exchange trusts Telegram signature, never the client selector',async()=>{
+ const a=await fixture(),b=await fixture();
+ const config={bindings:[a.binding,b.binding]};
+ const app=createApp(db,ref=>ref===a.binding.tokenSecretRef?a.secret:ref===b.binding.tokenSecretRef?b.secret:undefined,
+  async()=>{throw new DomainError('unauthorized',401);},adminConfig,config);apps.push(app);
+ const exchange=(initData:string,payload:Record<string,unknown>={})=>app.inject({method:'POST',url:'/v1/mini/auth/exchange',headers:{origin,'x-mini-csrf':'1'},payload:{initData,...payload}});
+ const first=await exchange(a.signed());assert.equal(first.statusCode,200,first.body);
+ const firstMe=await app.inject({url:'/v1/mini/me',headers:{origin,authorization:`Bearer ${first.json().token}`}});
+ assert.equal(firstMe.json().botId,a.bot.id);
+ const secondRaw=b.signed(777),second=await exchange(secondRaw,{appKey:a.binding.appKey,recovery:true});
+ assert.equal(second.statusCode,200,second.body);
+ const secondMe=await app.inject({url:'/v1/mini/me',headers:{origin,authorization:`Bearer ${second.json().token}`}});
+ assert.equal(secondMe.json().botId,b.bot.id);assert.notEqual(secondMe.json().brandId,firstMe.json().brandId);
+ const cookie=String(second.headers['set-cookie']).split(';')[0]!;
+ const recovered=await app.inject({method:'POST',url:'/v1/mini/auth/recover',headers:{origin,'x-mini-csrf':'1',cookie},payload:{appKey:a.binding.appKey,initData:secondRaw}});
+ assert.equal(recovered.statusCode,200,recovered.body);assert.equal(recovered.json().token,second.json().token);
+ assert.equal((await exchange(b.signed(778),{botId:a.bot.id})).statusCode,400);
+ const sessionsBefore=(await one(db,'SELECT count(*)::int AS n FROM mini_sessions WHERE bot_id=ANY($1)',[[a.bot.id,b.bot.id]])).n;
+ const ambiguous=createApp(db,ref=>[a.binding.tokenSecretRef,b.binding.tokenSecretRef].includes(ref)?a.secret:undefined,
+  async()=>{throw new DomainError('unauthorized',401);},adminConfig,config);apps.push(ambiguous);
+ const rejected=await ambiguous.inject({method:'POST',url:'/v1/mini/auth/exchange',headers:{origin},payload:{initData:a.signed(779)}});
+ assert.equal(rejected.statusCode,401);assert.equal((await one(db,'SELECT count(*)::int AS n FROM mini_sessions WHERE bot_id=ANY($1)',[[a.bot.id,b.bot.id]])).n,sessionsBefore);
 });
 test('mini and administrator principals never substitute; existing cookie flags/CSRF remain',async()=>{
  const f=await fixture(),miniToken=await login(f),password=randomBytes(32).toString('hex'),adminLogin=`mini-admin-${randomUUID()}`;
@@ -153,8 +175,8 @@ test('mini: authentication disabled by default creates no Mini route or database
 test('mini: PostgreSQL-backed throttles shared between app instances, separate from admin',async()=>{
  const f=await fixture();const adminBucket=miniDigest(randomUUID());
  await db.query('INSERT INTO admin_login_limits(bucket_hash,attempts) VALUES($1,3)',[adminBucket]);
- for(let i=0;i<50;i++) assert.equal((await f.exchange(f.signed(),i%2?f.makeApp():f.app,{appKey:'unknown'})).statusCode,401);
- assert.equal((await f.exchange(f.signed(),f.app,{appKey:'unknown'})).statusCode,429);
+ for(let i=0;i<50;i++) assert.equal((await f.exchange('invalid',i%2?f.makeApp():f.app,{appKey:'unknown'})).statusCode,401);
+ assert.equal((await f.exchange('invalid',f.app,{appKey:'unknown'})).statusCode,429);
  // P2: valid signed users must not share the anonymous proxy-IP budget.
  assert.equal((await f.exchange()).statusCode,200);assert.equal(Number((await one(db,'SELECT attempts FROM admin_login_limits WHERE bucket_hash=$1',[adminBucket])).attempts),3);
  const key=randomUUID();for(let i=0;i<10;i++) await miniRateLimit(db,key,10);await assert.rejects(miniRateLimit(db,key,10),/mini_rate_limited/);

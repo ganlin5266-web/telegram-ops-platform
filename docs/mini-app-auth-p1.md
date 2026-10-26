@@ -18,13 +18,18 @@ and MINI_APPS_JSON={"bindings":[{"appKey":"approved-app","botId":"<existing UUID
 Default false/unset installs no Mini routes and accesses no Mini tables. Invalid
 explicit flags/config fail startup. Entries require unique appKey, Bot and secret
 reference, exact HTTPS origin without path/query/credentials/wildcards. appKey is
-only a selector, never authentication. The chosen reference must match the active
-Bot row; Brand must be active. No environment or request can select arbitrary
-secrets. Never put token values in JSON/VITE variables. Missing secret fails closed.
+server-side binding metadata, never client authority. For exchange, the server
+tests same-origin approved bindings and accepts exactly one Telegram HMAC match.
+For recovery, the existing authenticated Session selects its exact binding. The
+reference must match the active Bot row; Brand must be active. No environment or
+request can select arbitrary secrets. Never put token values in JSON/VITE variables.
+Missing or ambiguous secret matches fail closed.
 
 ## Contract
 
-- POST /v1/mini/auth/exchange: JSON {appKey,initData}. No query or extra identity fields.
+- POST /v1/mini/auth/exchange: JSON {initData,recovery?}. A legacy appKey is accepted
+  during rolling deployment but is ignored for Bot authentication. No client botId,
+  query or extra identity fields.
   Returns {token,tokenType:"Bearer",expiresAt}; no Set-Cookie. Store only in caller
   memory. No localStorage, URL, analytics, error telemetry, logs or persistent storage.
 - GET /v1/mini/me: Authorization: Bearer <token>; returns only

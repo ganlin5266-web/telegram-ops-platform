@@ -112,8 +112,6 @@ export type RedemptionReveal = {
   businessDate: string;
   claimedAt: string | null;
 };
-import { miniBrand } from "./brand";
-const APP_KEY = miniBrand.appKey;
 export function createClient(send: typeof fetch = fetch) {
   let token: string | undefined,
     attempted = false;
@@ -206,7 +204,7 @@ export function createClient(send: typeof fetch = fetch) {
           await call(
             "/auth/recover",
             "POST",
-            { appKey: APP_KEY, initData: raw },
+            { initData: raw },
             undefined,
             true,
           ),
@@ -221,7 +219,7 @@ export function createClient(send: typeof fetch = fetch) {
         await call(
           "/auth/exchange",
           "POST",
-          { appKey: APP_KEY, initData: raw, recovery: true },
+          { initData: raw, recovery: true },
           undefined,
           true,
         ),

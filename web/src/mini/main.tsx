@@ -50,7 +50,7 @@ export function MiniApp({
     >(null),
     [platformVerified, setPlatformVerified] = useState<boolean>(),
     [device, setDevice] = useState<Locale | undefined>(() =>
-      readPreference(miniBrand.appKey),
+      readPreference(miniBrand.preferenceKey),
     );
   const version = useRef(0);
   const panelRef = useRef<HTMLElement>(null);
@@ -661,7 +661,7 @@ export function MiniApp({
                         key={l}
                         aria-pressed={locale === l}
                         onClick={() => {
-                          savePreference(miniBrand.appKey, l);
+                          savePreference(miniBrand.preferenceKey, l);
                           setDevice(l);
                         }}
                       >

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createMiniTestClient, TEST_APP_KEY } from "../src/mini-test/client";
+import { createMiniTestClient } from "../src/mini-test/client";
 const identity = {
   userId: "11111111-1111-4111-8111-111111111111",
   brandId: "22222222-2222-4222-8222-222222222222",
@@ -17,12 +17,11 @@ function setup() {
   return { token, send, client: createMiniTestClient(send) };
 }
 describe("P1 staging acceptance client", () => {
-  it("exchanges raw initData only with the fixed public selector; no admin Cookie", async () => {
+  it("exchanges raw initData without trusting a client Bot selector; no admin Cookie", async () => {
     const { send, client } = setup();
     expect(await client.connect("synthetic-init-data")).toEqual(identity);
     expect(send.mock.calls[0][0]).toBe("/v1/mini/auth/exchange");
     expect(JSON.parse(String(send.mock.calls[0][1]?.body))).toEqual({
-      appKey: TEST_APP_KEY,
       initData: "synthetic-init-data",
     });
     for (const [, options] of send.mock.calls) {

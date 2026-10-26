@@ -26,8 +26,18 @@ export function miniConfig(env:NodeJS.ProcessEnv):MiniConfig|undefined {
  if(env.MINI_AUTH_ENABLED!=='true') throw new Error('Invalid Mini App configuration');
  try {const config=JSON.parse(env.MINI_APPS_JSON??'');validateMiniConfig(config);return config;} catch {throw new Error('Invalid Mini App configuration');}
 }
-const exchangeBody=z.object({appKey:z.string().max(64),initData:z.string().min(1).max(16384),recovery:z.boolean().optional()}).strict();
+// appKey remains optional for rolling compatibility with older clients. It is
+// never trusted to select a Bot: the Telegram signature or the existing
+// recovery session is the authority for the binding.
+const exchangeBody=z.object({appKey:z.string().max(64).optional(),initData:z.string().min(1).max(16384),recovery:z.boolean().optional()}).strict();
 const empty=z.object({}).strict();
+function signedBinding(config:MiniConfig,secrets:SecretProvider,origin:string,initData:string) {
+ const matches=config.bindings.filter(binding=>binding.origin===origin).filter(binding=>{
+  const secret=secrets(binding.tokenSecretRef);if(!secret) return false;
+  try {verifyInitData(initData,secret);return true;} catch {return false;}
+ });
+ return matches.length===1?matches[0]:undefined;
+}
 export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretProvider,config:MiniConfig,vault?:RedemptionCodeVault) {
  validateMiniConfig(config);
  app.addHook('onRequest',async(req,reply)=>{
@@ -50,13 +60,15 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
  for(const url of ['/auth/exchange','/me','/auth/logout','/auth/recover','/platforms','/platform-identities','/redemption-tiers','/redemption-orders','/redemption-orders/:id/claim','/redemption-orders/:id/code']) app.options(url,async()=>({}));
  app.post('/auth/exchange',{bodyLimit:20000},async(req,reply)=>{
   empty.parse(req.query);const body=exchangeBody.parse(req.body);
-  const binding=config.bindings.find(b=>b.appKey===body.appKey);
-  if(!binding) {await miniRateLimit(db,`invalid:unknown:${req.ip}`,50);throw miniUnauthorized();}
-  if(req.headers.origin!==binding.origin) throw new DomainError('mini_origin_not_allowed',403);
-  const secret=secrets(binding.tokenSecretRef);if(!secret) throw miniUnauthorized();
-  try {verifyInitData(body.initData,secret);} catch(error) {
-   await miniRateLimit(db,`invalid:${binding.botId}:${req.ip}`,50);throw error;
+  const origin=req.headers.origin;
+  const binding=origin?signedBinding(config,secrets,origin,body.initData):undefined;
+  if(!binding) {
+   // A legacy selector may partition denial counters, but never selects the
+   // authenticated Bot or changes the authorization result.
+   const hinted=config.bindings.find(b=>b.origin===origin&&b.appKey===body.appKey);
+   await miniRateLimit(db,`invalid:${hinted?.botId??'unmatched'}:${req.ip}`,50);throw miniUnauthorized();
   }
+  const secret=secrets(binding.tokenSecretRef);if(!secret) throw miniUnauthorized();
   if(body.recovery) requireRecoveryProtection(req.headers);
   const session=await exchangeMiniSession(db,binding,body.initData,secret,req.id);
   if(body.recovery) reply.header('Set-Cookie',recoveryCookie(session.token));
@@ -65,10 +77,14 @@ export function attachMiniAuth(app:FastifyInstance,db:Database,secrets:SecretPro
  app.post('/auth/recover',{bodyLimit:20000},async(req,reply)=>{
   empty.parse(req.query);requireRecoveryProtection(req.headers);
   const body=exchangeBody.omit({recovery:true}).parse(req.body);
-  const binding=config.bindings.find(b=>b.appKey===body.appKey);
-  if(!binding||req.headers.origin!==binding.origin) throw miniUnauthorized();
-  const secret=secrets(binding.tokenSecretRef);if(!secret) throw miniUnauthorized();
-  try {return await recoverMini(db,readRecoveryCookie(req.headers.cookie),binding,body.initData,secret,binding.origin,req.id);}
+  const token=readRecoveryCookie(req.headers.cookie),origin=req.headers.origin;
+  try {
+   const principal=await authenticateMini(db,`Bearer ${token}`,config.bindings,origin);
+   const binding=config.bindings.find(b=>b.appKey===principal.appKey&&b.botId===principal.botId);
+   if(!binding||origin!==binding.origin) throw miniUnauthorized();
+   const secret=secrets(binding.tokenSecretRef);if(!secret) throw miniUnauthorized();
+   return await recoverMini(db,token,binding,body.initData,secret,binding.origin,req.id);
+  }
   catch(error) {reply.header('Set-Cookie',recoveryCookie('',0));throw error;}
  });
  attachMiniQueries(app,db,config.bindings);

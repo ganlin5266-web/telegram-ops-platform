@@ -18,6 +18,11 @@ describe("Mini V1 client", () => {
     expect(send.mock.calls[0][0]).toBe("/v1/mini/auth/recover");
     expect(send.mock.calls[0][1]?.credentials).toBe("same-origin");
     expect(send.mock.calls[0][1]?.headers).toHaveProperty("X-Mini-CSRF", "1");
+    expect(JSON.parse(String(send.mock.calls[0][1]?.body))).toEqual({
+      initData: "synthetic",
+    });
+    expect(String(send.mock.calls[0][1]?.body)).not.toContain("appKey");
+    expect(String(send.mock.calls[0][1]?.body)).not.toContain("botId");
     expect(client).not.toHaveProperty("token");
     expect(store).not.toHaveBeenCalled();
   });

@@ -106,7 +106,9 @@ describe("Mini product presentation", () => {
     await u.click(screen.getByRole("button", { name: /语言 简体中文/ }));
     await u.click(screen.getByRole("button", { name: "English", exact: true }));
     await waitFor(() => expect(document.documentElement.lang).toBe("en"));
-    expect(localStorage.getItem("mini-ui-language:p1-staging-auth")).toBe("en");
+    expect(localStorage.getItem("mini-ui-language:telegram-mini-ui")).toBe(
+      "en",
+    );
     await u.click(
       screen.getByRole("button", { name: "Filipino", exact: true }),
     );

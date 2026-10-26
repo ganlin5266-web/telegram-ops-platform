@@ -1,7 +1,7 @@
 // Public presentation only. Never put credentials or upstream addresses here.
 // A deployment selects one approved Mini app; server binding remains authoritative.
 export const miniBrand = {
-  appKey: "p1-staging-auth",
+  preferenceKey: "telegram-mini-ui",
   name: "FUN Club Staging",
   logo: null as string | null,
   monogram: "F",

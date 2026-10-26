@@ -34,7 +34,6 @@ test("P1 synthetic browser contract keeps bearer private and verifies logout rej
     expect(req.headers().cookie).toBeUndefined();
     if (req.url().endsWith("/auth/exchange")) {
       expect(req.postDataJSON()).toEqual({
-        appKey: "p1-staging-auth",
         initData: "synthetic-browser-only",
       });
       await route.fulfill({ json: { token, tokenType: "Bearer" } });
