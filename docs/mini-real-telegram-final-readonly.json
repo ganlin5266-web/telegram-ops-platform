@@ -1,0 +1,70 @@
+{
+  "stage": "mini_real_acceptance_final",
+  "readonly": true,
+  "writes": 0,
+  "tls": true,
+  "sha": "2548efa1b63e19c8c56ef21ed4b51d3b9aaab732",
+  "rewards_enabled": false,
+  "allowlist_configured": false,
+  "points": [
+    {
+      "balance": "2640",
+      "ledger": "2640",
+      "lots": "2640",
+      "ledger_mismatches": "0",
+      "lot_mismatches": "0"
+    }
+  ],
+  "growth": [
+    {
+      "balance": "1205",
+      "ledger": "1205"
+    }
+  ],
+  "counts": [
+    {
+      "users": "30",
+      "test_users": "10",
+      "point_accounts": "9",
+      "point_ledger": "23",
+      "growth_accounts": "11",
+      "growth_ledger": "35",
+      "test_members": "0",
+      "test_referrals": "7",
+      "codes": "0",
+      "redemptions": "0",
+      "rewards": "0"
+    }
+  ],
+  "sessions": [
+    {
+      "total": "3",
+      "active": "1",
+      "logout_revoked": "1",
+      "created_this_test": "2",
+      "users": "1"
+    }
+  ],
+  "audit": [
+    {
+      "action": "mini.auth.exchange",
+      "n": "3",
+      "latest": "2026-10-27T14:19:09.149Z"
+    },
+    {
+      "action": "mini.auth.logout",
+      "n": "1",
+      "latest": "2026-10-27T14:21:43.526Z"
+    },
+    {
+      "action": "mini.auth.recovery",
+      "n": "1",
+      "latest": "2026-10-27T14:18:58.260Z"
+    }
+  ],
+  "scope": [
+    {
+      "mismatches": "0"
+    }
+  ]
+}
