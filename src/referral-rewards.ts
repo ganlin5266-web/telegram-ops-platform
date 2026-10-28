@@ -15,9 +15,13 @@ const referralRewardScopeSchema = z.object({
   brandId: z.uuid(),
   botId: z.uuid(),
   platformId: z.uuid(),
+  // Internal telegram_users IDs, scoped to this tuple; never caller-supplied
+  // Telegram IDs, display names, or a global pool shared between Bots.
+  userIds: z.array(z.uuid().transform(id => id.toLowerCase())).min(2).max(100)
+    .refine(ids => new Set(ids).size === ids.length),
 }).strict();
 
-type ReferralRewardScope = z.infer<typeof referralRewardScopeSchema>;
+type ReferralRewardScope = Pick<z.infer<typeof referralRewardScopeSchema>, "brandId" | "botId" | "platformId">;
 
 const scopeKey = (scope: ReferralRewardScope) =>
   `${scope.brandId}:${scope.botId}:${scope.platformId}`;
@@ -37,7 +41,7 @@ const referralRewardAllowedScopes = () => {
     if (!parsed.success) return null;
     const keys = parsed.data.map(scopeKey);
     if (new Set(keys).size !== keys.length) return null;
-    return new Set(keys);
+    return new Map(parsed.data.map(scope => [scopeKey(scope), new Set(scope.userIds)]));
   } catch {
     return null;
   }
@@ -127,6 +131,19 @@ export async function evaluateReferralByIdentityTx(tx: Queryable, identityId: st
     [identity.brand_id, identity.bot_id, identity.user_id],
   )).rows[0];
   if (!referral) return { status: "no_referral" };
+  const allowedUsers = allowedScopes.get(scopeKey({
+    brandId: identity.brand_id, botId: identity.bot_id, platformId: identity.platform_id,
+  }))!;
+  // All automatic/manual/retry callers converge here, before evidence, counters,
+  // audit, or Points writes. Both parties must qualify even for inviter-only rules.
+  if (!allowedUsers.has(referral.inviter_id) || !allowedUsers.has(referral.invitee_id))
+    return { status: "disabled" as const };
+  const participants = (await tx.query(
+    `SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2
+       AND id=ANY($3::uuid[]) AND status='active' FOR SHARE`,
+    [identity.brand_id, identity.bot_id, [referral.inviter_id, referral.invitee_id]],
+  )).rows;
+  if (participants.length !== 2) return { status: "disabled" as const };
   if (identity.platform_status !== "active") return { status: "platform_unavailable" };
   const platformDate = await businessDate(tx, identity.platform_id, identity.brand_id);
   const previous = await existingOutcome(tx, identity.brand_id, identity.platform_id, referral.id);

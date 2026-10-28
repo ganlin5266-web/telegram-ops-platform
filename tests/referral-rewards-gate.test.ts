@@ -13,7 +13,7 @@ import {
 
 let db: Database;
 let close: () => Promise<void>;
-let manualScope: { brandId: string; botId: string; platformId: string; adminId: string; referralId: string; identityId: string };
+let manualScope: { brandId: string; botId: string; platformId: string; adminId: string; referralId: string; identityId: string; userIds: string[] };
 
 before(async () => {
   const p = new PGlite();
@@ -36,7 +36,7 @@ before(async () => {
   const referral = await one(db, "INSERT INTO referrals(brand_id,bot_id,inviter_id,invitee_id,start_parameter) VALUES($1,$2,$3,$4,'gate') RETURNING id", [brand.id, bot.id, inviter.id, invitee.id]);
   const identity = await one(db, "INSERT INTO platform_identities(brand_id,bot_id,user_id,telegram_user_id,platform_id,platform_uid,verification_method,submission_key) VALUES($1,$2,$3,700002,$4,'GATE-UID','manual_admin',$5) RETURNING id", [brand.id, bot.id, invitee.id, platform.id, randomUUID()]);
   await db.query("UPDATE platform_identities SET status='verified',verified_at=now(),verified_by=$2,evidence_reference='CASE-GATE' WHERE id=$1", [identity.id, admin.id]);
-  manualScope = { brandId: brand.id, botId: bot.id, platformId: platform.id, adminId: admin.id, referralId: referral.id, identityId: identity.id };
+  manualScope = { brandId: brand.id, botId: bot.id, platformId: platform.id, adminId: admin.id, referralId: referral.id, identityId: identity.id, userIds: [inviter.id, invitee.id] };
 });
 
 after(async () => {
@@ -55,8 +55,8 @@ test("allowlist is fail-closed and requires one exact Brand/Bot/Platform tuple",
     "{}",
     JSON.stringify([{ brandId: manualScope.brandId, botId: manualScope.botId }]),
     JSON.stringify([
-      { brandId: manualScope.brandId, botId: manualScope.botId, platformId: manualScope.platformId },
-      { brandId: manualScope.brandId, botId: manualScope.botId, platformId: manualScope.platformId },
+      { brandId: manualScope.brandId, botId: manualScope.botId, platformId: manualScope.platformId, userIds: manualScope.userIds },
+      { brandId: manualScope.brandId, botId: manualScope.botId, platformId: manualScope.platformId, userIds: manualScope.userIds },
     ]),
   ];
   for (const value of invalid) {
@@ -67,8 +67,8 @@ test("allowlist is fail-closed and requires one exact Brand/Bot/Platform tuple",
     assert.deepEqual(await evaluateReferralReward(db, { adminId: manualScope.adminId }, manualScope, manualScope.referralId, randomUUID()), { status: "disabled" });
   }
   for (const scope of [
-    { brandId: randomUUID(), botId: manualScope.botId, platformId: manualScope.platformId },
-    { brandId: manualScope.brandId, botId: randomUUID(), platformId: manualScope.platformId },
+    { brandId: randomUUID(), botId: manualScope.botId, platformId: manualScope.platformId, userIds: manualScope.userIds },
+    { brandId: manualScope.brandId, botId: randomUUID(), platformId: manualScope.platformId, userIds: manualScope.userIds },
     { brandId: manualScope.brandId, botId: manualScope.botId, platformId: randomUUID() },
   ]) {
     process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON = JSON.stringify([scope]);
@@ -78,7 +78,7 @@ test("allowlist is fail-closed and requires one exact Brand/Bot/Platform tuple",
   process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON = JSON.stringify([{
     brandId: manualScope.brandId,
     botId: manualScope.botId,
-    platformId: manualScope.platformId,
+    platformId: manualScope.platformId, userIds: manualScope.userIds,
   }]);
   assert.equal(referralRewardScopeEnabled(manualScope), true);
   assert.equal((await db.transaction(tx => evaluateReferralByIdentityTx(tx, manualScope.identityId, randomUUID()))).status, "rule_unavailable");
@@ -114,7 +114,7 @@ test("gate toggling does not backfill a disabled historical identity or queue wo
   process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON = JSON.stringify([{
     brandId: manualScope.brandId,
     botId: manualScope.botId,
-    platformId: manualScope.platformId,
+    platformId: manualScope.platformId, userIds: manualScope.userIds,
   }]);
   assert.equal((await one(db, "SELECT count(*)::int AS n FROM referral_reward_events")).n, before.n);
   assert.equal((await one(db, "SELECT count(*)::int AS n FROM referral_qualification_evidence")).n, 0);

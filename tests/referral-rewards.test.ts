@@ -51,6 +51,8 @@ test("Batch 2A grants 50/20 atomically and counts invitations separately from le
   await changeReferralRule(db, { adminId: admin.id }, brand.id, rewardRule.id, "publish", randomUUID());
   const outsider = await one(db, "INSERT INTO admins(auth_subject,display_name) VALUES($1,'OUTSIDER') RETURNING id", [randomUUID()]);
   await assert.rejects(() => createReferralRule(db, { adminId: outsider.id }, brand.id, { platformId: platform.id, campaignKey: "DENIED", effectiveFrom: "2026-01-01", effectiveUntil: null }, randomUUID()), /forbidden/);
+  const allowedUsers=(await db.query("SELECT id FROM telegram_users WHERE bot_id=$1",[bot.id])).rows.map(u=>u.id);
+  process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON=JSON.stringify([{brandId:brand.id,botId:bot.id,platformId:platform.id,userIds:allowedUsers}]);
   const results = [];
   for (const identityId of identityIds)
     results.push(await db.transaction((tx) => evaluateReferralByIdentityTx(tx, identityId, randomUUID())));
@@ -73,8 +75,8 @@ test("Batch 2A grants 50/20 atomically and counts invitations separately from le
   const secondIdentity = await one(db, `INSERT INTO platform_identities(brand_id,bot_id,user_id,telegram_user_id,platform_id,platform_uid,verification_method,submission_key) VALUES($1,$2,$3,2002,$4,'UID0','manual_admin',$5) RETURNING id`, [brand.id, secondBot.id, secondInvitee.id, platform.id, randomUUID()]);
   await db.query("UPDATE platform_identities SET status='verified',verified_at=now(),verified_by=$2,evidence_reference='CASE-CROSS-BOT' WHERE id=$1", [secondIdentity.id, admin.id]);
   process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON = JSON.stringify([
-    { brandId: brand.id, botId: bot.id, platformId: platform.id },
-    { brandId: brand.id, botId: secondBot.id, platformId: platform.id },
+    { brandId: brand.id, botId: bot.id, platformId: platform.id, userIds: allowedUsers },
+    { brandId: brand.id, botId: secondBot.id, platformId: platform.id, userIds: [secondInviter.id,secondInvitee.id] },
   ]);
   const crossBot = await db.transaction((tx) => evaluateReferralByIdentityTx(tx, secondIdentity.id, randomUUID()));
   assert.equal(crossBot.status, "manual_review");
@@ -85,6 +87,8 @@ test("Batch 2A grants 50/20 atomically and counts invitations separately from le
   const disabledReferral = await one(db, "INSERT INTO referrals(brand_id,bot_id,inviter_id,invitee_id,start_parameter) VALUES($1,$2,$3,$4,'disabled') RETURNING id", [brand.id,bot.id,inviter.id,disabledUser.id]);
   const disabledIdentity = await one(db, `INSERT INTO platform_identities(brand_id,bot_id,user_id,telegram_user_id,platform_id,platform_uid,verification_method,submission_key) VALUES($1,$2,$3,999,$4,'UID999','manual_admin',$5) RETURNING id`, [brand.id,bot.id,disabledUser.id,platform.id,randomUUID()]);
   await db.query("UPDATE platform_identities SET status='verified',verified_at=now(),verified_by=$2,evidence_reference='CASE-DISABLED' WHERE id=$1", [disabledIdentity.id,admin.id]);
+  allowedUsers.push(disabledUser.id);
+  process.env.BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON=JSON.stringify([{brandId:brand.id,botId:bot.id,platformId:platform.id,userIds:allowedUsers}]);
   assert.equal((await db.transaction((tx) => evaluateReferralByIdentityTx(tx, disabledIdentity.id, randomUUID()))).status, "rule_unavailable");
   assert.ok(disabledReferral.id);
   assert.equal((await one(db, "SELECT count(*)::int AS n FROM point_ledger")).n, 10);

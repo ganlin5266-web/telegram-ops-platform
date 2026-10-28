@@ -6,15 +6,23 @@ Staging write, Points award, inventory import, or deployment.
 ## Release gate
 
 - Deploy the reviewed commit with `BATCH2A_REFERRAL_REWARDS_ENABLED=false`.
-- Configure `BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON` as a server-only JSON
-  array of exact `brandId` / `botId` / `platformId` tuples. Missing, empty,
-  malformed, duplicate, incomplete, or non-matching configuration disables all
-  referral reward writes.
-- Reconfirm the selected Staging IDs immediately before configuration. The
-  previously approved candidate scope was:
-  - Brand: `db28eeb8-cc2f-411d-bebb-06eed19198a7`
-  - Bot: `991f1b96-4e4a-4455-879e-9af51e48564a`
-  - Platform: `8816f907-5767-47e0-a119-a74d52e39db7`
+- The existing server-only `BATCH2A_REFERRAL_REWARDS_ALLOWLIST_JSON` now
+  requires `userIds` on **every** exact `brandId` / `botId` / `platformId` tuple.
+  These are internal `telegram_users.id` UUIDs, not Telegram numeric IDs,
+  Member IDs, usernames, or values submitted by a Mini client. Both inviter and
+  invitee must be listed on the same tuple and be active users of its Brand/Bot,
+  even when the optional invitee reward is disabled.
+- Missing, empty, malformed, duplicate or incomplete configuration fails closed.
+  Old tuple-only JSON deliberately grants nobody. No new env variable or Secret
+  is needed; leave the existing allowlist unset and master false during deployment.
+- Candidate scope is exclusively the separately prepared Synthetic Brand/Bot/
+  Platform. Resolve its seven approved user UUIDs from the creation Audit before
+  any separately approved configuration; exclude the control identity and both
+  non-Synthetic accounts. Do not include the previous ordinary Staging scope.
+- The shared evaluator gates the official UID-verified hook, manual API and any
+  internal/retry caller before evidence, counters, Audit or reward writes. There
+  is no reward queue or historical scanner. Configuration changes do not replay
+  old events. Existing manual evaluation remains an explicit permissioned action.
 - Keep the master flag off until a separate controlled-write approval. Enabling
   an allowlist alone cannot award Points and does not scan or enqueue history.
 - No migration or runtime grant is required by this change.
