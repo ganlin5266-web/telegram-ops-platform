@@ -1469,3 +1469,69 @@ main > :last-child {
 .invite-actions small {
   flex-basis: 100%;
 }
+
+/* P0: one dominant action, compact daily context and four destinations. */
+.mini-shell .platform-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+  font-size: 13px;
+}
+.mini-shell .platform-picker select {
+  max-width: 70%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #dbe3ed);
+  background: var(--card, white);
+  color: inherit;
+}
+.mini-shell .next-reward {
+  display: grid;
+  gap: 5px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #ffffff35;
+}
+.mini-shell .next-reward strong {
+  font-size: 24px;
+}
+.mini-shell .next-reward p {
+  margin: 0;
+}
+.mini-shell .checkin-panel {
+  display: grid;
+  gap: 10px;
+}
+.mini-shell .checkin-panel small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.mini-shell .checkin-panel p {
+  margin: 3px 0;
+}
+.mini-shell .checkin-panel:not(.primary-action) button {
+  width: fit-content;
+}
+.mini-shell .home-invitation small {
+  display: block;
+}
+.mini-shell .invite-offer {
+  margin: 12px 0;
+}
+.mini-shell .redemption-tier {
+  gap: 12px;
+  align-items: start;
+}
+.mini-shell .redemption-tier small {
+  display: block;
+  margin-top: 5px;
+}
+.mini-shell .redemption-tier button {
+  max-width: 47%;
+  overflow-wrap: anywhere;
+}
+.mini-shell nav button {
+  flex: 1;
+}

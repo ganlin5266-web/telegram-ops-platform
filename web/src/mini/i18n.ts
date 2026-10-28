@@ -1,3 +1,7 @@
+import ptBR from "./locales/pt-BR";
+import esMX from "./locales/es-MX";
+import fil from "./locales/fil";
+
 export const supportedUiLocales = [
   "zh-CN",
   "pt-BR",
@@ -14,18 +18,65 @@ export const localeNames: Record<Locale, string> = {
   fil: "Filipino",
 };
 export const zh = {
+  p0StatusUnknown: "状态暂时无法确认",
+  p0DataIncomplete: "数据不完整，请稍后查看",
+
+  p0LevelPending: "已达到 LV{level} 门槛，等待等级更新",
+  p0MemberPending: "会员资料尚未初始化",
+
+  p0MemberDisabled: "会员成长尚未启用",
+  p0MemberDisabledBody: "启用后将在这里显示你的等级和Growth。",
+  p0LevelProgress: "升级进度",
+  p0HighestLevel: "已达最高等级，Growth继续累计。",
+  p0GrowthHistory: "Growth记录",
+  p0GrowthEmpty: "暂无Growth记录",
+  p0EarnedToday: "今日获得",
+  p0CheckinSubmitted: "签到已提交，Growth状态已刷新。",
+
+  p0CodeCopyFailed: "复制失败，请重试",
+  p0Quota: "今日兑换 {count}/{limit} 次 · {points}/{cap} Points",
+
+  p0NextReward: "下一档奖励",
+  p0PointsGap: "还差 {points} Points",
+  p0NoReward: "暂无可兑换奖励",
+  p0Platform: "当前平台",
+  p0ReviewUid: "查看审核进度",
+  p0ViewRecords: "查看记录",
+  p0CheckinEarned: "本次实际获得 {growth} Growth",
+  p0NextCheckin: "下次签到：{time}",
+  p0CheckinCap: "受今日Growth上限限制，本次签到奖励受限",
+  p0CheckinUnknown: "暂时无法确认签到状态",
+  p0RewardedToday: "今日已奖励人数",
+  p0PendingInvites: "待核实人数",
+  p0CapExceeded: "超额不奖励，不顺延",
+  p0RewardInactive: "当前暂不可获得邀请奖励，仍可分享链接",
+  p0InviterReward: "邀请人奖励：{points} Points",
+  p0InviteeReward: "被邀请人奖励：{points} Points",
+  p0QualifiedToday: "今日合格邀请",
+  p0ReviewRequired: "异常待复核",
+  p0DailyLimit: "今日兑换额度已用完",
+  p0Unavailable: "暂时无法兑换",
+  p0InsufficientPoints: "Points余额不足",
+  p0InsufficientStock: "库存不足",
+  p0OrderProcessing: "订单处理中，请从订单记录查看结果",
+  p0CodeUnavailable: "兑换码暂不可查看，请查看订单状态",
+  p0CheckinGrowth: "每日签到 · 获得Growth",
+  p0InvitationRules: "奖励需符合当前活动、UID核实、去重及每日上限规则",
+  p0UidNoGuaranteedReward: "绑定或核实UID不保证获得邀请奖励",
+  p0NoActivity: "当前没有可参与的邀请活动",
+
   p2GapTo: "还差 {gap} Growth 升级 LV{level}",
   p2CheckinFailed: "签到暂未完成，请重试",
   p2DoneTitle: "今日已签到 ✓",
   p2DoneBody: "明天可再次签到。",
   p2ReferralPending: "邀请统计待后端开放",
   p2CheckedIn: "今日已签到 ✓",
-  p2CheckedInBody: "今日签到 Growth 已计入",
+  p2CheckedInBody: "查看下方签到实际入账 Growth",
   p2CheckinPending: "签到状态确认中",
   p2CheckinNow: "立即签到",
   p2CheckinDone: "签到完成",
   p2GrowthChange: "Growth {from} → {to}",
-  p2InviteNext: "邀请好友继续赚 Growth",
+  p2InviteNext: "邀请好友赚 Points",
   p2NearLevel: "即将升级",
   p2EarnGrowth: "去赚 Growth",
   p2LevelUp: "恭喜升级到 LV{level}",
@@ -66,13 +117,13 @@ export const zh = {
   inviteCopyFailed: "复制失败，请使用分享按钮",
   levelProtected: "你的会员等级已保留",
   todayActions: "今日行动",
-  checkinTitle: "完成今日签到",
+  checkinTitle: "每日签到 · 获得 Growth",
   checkinBody: "签到可获得 Growth，具体以会员规则为准",
   bindCta: "去绑定",
   inviteCta: "去邀请",
   inviteActionBody: "有效邀请可获得奖励，规则以正式公布为准",
   growthWays: "怎么赚 Growth",
-  growthWaysBody: "查看签到、邀请与平台行为",
+  growthWaysBody: "查看签到与平台行为",
   wayPlatform: "平台行为",
   currentBenefits: "当前权益",
   nextBenefits: "下一等级权益",
@@ -168,7 +219,8 @@ export const zh = {
   viewCode: "查看兑换码",
   codeCopied: "兑换码已复制。",
   openPlatform: "前往游戏平台",
-  platformUseNotice: "请到游戏平台输入兑换码。领取记录不代表游戏平台已核销。",
+  platformUseNotice:
+    "请到游戏平台输入兑换码。领取不代表游戏平台已核销或彩金到账。",
   code_assigned: "兑换码待领取",
   code_claimed: "兑换码已领取",
   review_required: "人工核实中",
@@ -231,7 +283,7 @@ export const zh = {
   timeout: "服务连接超时，请稍候后重新连接。",
   invalid_json: "暂时无法读取，请稍后重试。",
   unauthorized: "身份已失效，请关闭并重新打开小程序。",
-  forbidden: "当前操作不可用。",
+  forbidden: "你没有执行此操作的权限。",
   not_found: "内容暂不可用。",
   conflict: "状态已变化，请重新读取。",
   rate_limit: "操作较频繁，请稍后再试。",
@@ -265,18 +317,69 @@ export const zh = {
 } as const;
 export type Key = keyof typeof zh;
 const en: Record<Key, string> = {
+  p0StatusUnknown: "Status is not confirmed",
+  p0DataIncomplete: "Data is incomplete. Please check again later.",
+
+  p0LevelPending: "LV{level} threshold reached; level update pending",
+  p0MemberPending: "Member profile not initialized yet",
+
+  p0MemberDisabled: "Member Growth is not enabled",
+  p0MemberDisabledBody:
+    "Your level and Growth will appear here when available.",
+  p0LevelProgress: "Level progress",
+  p0HighestLevel: "Highest level reached. Growth continues to accumulate.",
+  p0GrowthHistory: "Growth history",
+  p0GrowthEmpty: "No Growth history yet",
+  p0EarnedToday: "Earned today",
+  p0CheckinSubmitted: "Check-in submitted. Growth refreshed.",
+
+  p0CodeCopyFailed: "Could not copy. Please try again.",
+  p0Quota: "Today: {count}/{limit} exchanges · {points}/{cap} Points",
+
+  p0NextReward: "Next reward",
+  p0PointsGap: "{points} Points to go",
+  p0NoReward: "No rewards available to redeem",
+  p0Platform: "Current platform",
+  p0ReviewUid: "View verification progress",
+  p0ViewRecords: "View records",
+  p0CheckinEarned: "Actually credited: {growth} Growth",
+  p0NextCheckin: "Next check-in: {time}",
+  p0CheckinCap: "Today's Growth cap limits this check-in reward",
+  p0CheckinUnknown: "Check-in status is temporarily unavailable",
+  p0RewardedToday: "Friends rewarded today",
+  p0PendingInvites: "Friends awaiting verification",
+  p0CapExceeded: "Over the cap: no reward or carry-over",
+  p0RewardInactive:
+    "Invite rewards are unavailable now. You can still share your link",
+  p0InviterReward: "Inviter reward: {points} Points",
+  p0InviteeReward: "Invited friend's reward: {points} Points",
+  p0QualifiedToday: "Qualified invitations today",
+  p0ReviewRequired: "Requires manual review",
+  p0DailyLimit: "Today's redemption limit has been reached",
+  p0Unavailable: "Redemption is temporarily unavailable",
+  p0InsufficientPoints: "Not enough Points",
+  p0InsufficientStock: "Not enough stock",
+  p0OrderProcessing: "Order processing. Check its status in your order history",
+  p0CodeUnavailable: "The code is unavailable. Check the order status",
+  p0CheckinGrowth: "Daily check-in · earn Growth",
+  p0InvitationRules:
+    "Rewards require the active campaign, verified UID, uniqueness and daily-cap conditions",
+  p0UidNoGuaranteedReward:
+    "Linking or verifying a UID does not guarantee an invite reward",
+  p0NoActivity: "No invitation campaign is available now",
+
   p2GapTo: "{gap} Growth to reach LV{level}",
   p2CheckinFailed: "Check-in was not completed. Please retry.",
   p2DoneTitle: "Checked in today ✓",
   p2DoneBody: "You can check in again tomorrow.",
   p2ReferralPending: "Invite stats pending backend",
   p2CheckedIn: "Checked in today ✓",
-  p2CheckedInBody: "Today's check-in Growth is counted",
+  p2CheckedInBody: "See the Growth actually credited for check-in below",
   p2CheckinPending: "Confirming check-in status",
   p2CheckinNow: "Check in now",
   p2CheckinDone: "Check-in complete",
   p2GrowthChange: "Growth {from} → {to}",
-  p2InviteNext: "Invite friends to earn more Growth",
+  p2InviteNext: "Invite friends to earn Points",
   p2NearLevel: "Almost there",
   p2EarnGrowth: "Earn Growth",
   p2LevelUp: "Congratulations, you reached LV{level}",
@@ -319,14 +422,14 @@ const en: Record<Key, string> = {
   inviteCopyFailed: "Could not copy. Use the share button instead.",
   levelProtected: "Your member level has been kept",
   todayActions: "Today's actions",
-  checkinTitle: "Check in today",
+  checkinTitle: "Daily check-in · earn Growth",
   checkinBody: "Check-in earns Growth under the member rules",
   bindCta: "Link now",
   inviteCta: "Invite",
   inviteActionBody:
     "Qualified invites can earn rewards once rules are published",
   growthWays: "Ways to earn Growth",
-  growthWaysBody: "Check-in, invites and platform activity",
+  growthWaysBody: "Check-in and platform activity",
   wayPlatform: "Platform activity",
   currentBenefits: "Current benefits",
   nextBenefits: "Next level benefits",
@@ -437,7 +540,7 @@ const en: Record<Key, string> = {
   codeCopied: "Code copied.",
   openPlatform: "Open game platform",
   platformUseNotice:
-    "Enter this code on the game platform. Receiving a code does not mean it was redeemed there.",
+    "Enter this code on the game platform. Receiving a code does not confirm platform redemption or bonus payment.",
   code_assigned: "Code ready to claim",
   code_claimed: "Code claimed",
   review_required: "Under manual review",
@@ -508,7 +611,7 @@ const en: Record<Key, string> = {
   timeout: "The connection timed out. Please reconnect shortly.",
   invalid_json: "Unable to load this right now. Please try again.",
   unauthorized: "Your session has ended. Close and reopen the Mini App.",
-  forbidden: "This action is unavailable.",
+  forbidden: "You do not have permission to perform this action.",
   not_found: "Content is unavailable.",
   conflict: "The state has changed. Please reload.",
   rate_limit: "Too many attempts. Please wait and try again.",
@@ -543,55 +646,12 @@ const en: Record<Key, string> = {
   dataUpdatedThrough: "Updated through",
   dataWaiting: "Waiting for update",
 };
-export const dictionaries: Record<Locale, Partial<Record<Key, string>>> = {
+export const dictionaries: Record<Locale, Record<Key, string>> = {
   "zh-CN": zh,
   en,
-  "pt-BR": {
-    p2ReferralPending:
-      "As estatísticas de convites ainda não estão disponíveis",
-    p2InviteNext: "Convide amigos para continuar avançando",
-    p2WayInviteDo: "Convide amigos que atendam aos critérios da campanha",
-    p2TodayQualified: "Convites qualificados hoje",
-    p2PointsEarned: "Points ganhos com convites",
-    p2Remaining: "Recompensas restantes hoje",
-    p2QualifiedTotal: "Convites qualificados",
-    p2ShareSoon: "A campanha de convites ainda não está disponível",
-    p2StepsTitle: "Como um convite é validado",
-    p2StepRegister: "O amigo inicia o Bot",
-    p2StepBind: "O amigo vincula a conta da plataforma",
-    p2StepQualify: "O amigo atende aos critérios",
-    p2StepReward: "A recompensa é creditada",
-    p2ShareNote:
-      "Compartilhar não qualifica o convite. O amigo precisa atender aos critérios publicados.",
-    p2Friend: "Amigo",
-    p2RsInvited: "Convidado",
-    p2RsRegistered: "Cadastrado",
-    p2RsRewarded: "Recompensado",
-    inviteCta: "Convidar",
-    inviteActionBody: "Acompanhe o progresso e as recompensas dos convites",
-    actionInvite: "Convidar amigos",
-    actionInviteBody: "Veja o progresso e o histórico dos convites",
-    friends: "Convidar amigos",
-    invite: "Convites",
-    inviteShare: "Compartilhar com amigos",
-    inviteCopy: "Copiar link de convite",
-    inviteCopied: "Link de convite copiado",
-    inviteCopyFailed: "Não foi possível copiar. Use o botão de compartilhar.",
-    inviteEmpty: "Nenhum convite ainda",
-    inviteHint:
-      "Depois de compartilhar seu link, acompanhe aqui o progresso dos amigos.",
-    inviteHistory: "Histórico de convites",
-    rules: "Regras do convite",
-    rulesUnpublished: "Regras ainda não publicadas",
-    journey1: "Compartilhe seu link de convite",
-    invited: "Amigos convidados",
-    relation: "Convite",
-    bound: "Vinculado",
-    qualified: "Qualificado",
-    invalid: "Inválido",
-  },
-  "es-MX": {},
-  fil: {},
+  "pt-BR": ptBR,
+  "es-MX": esMX,
+  fil,
 };
 export function normalizeLocale(value?: string | null): Locale | undefined {
   const v = value?.trim().toLowerCase();
@@ -624,14 +684,15 @@ export function resolveLocale(p: {
     .map(normalizeLocale)
     .find(Boolean)!;
 }
-export const contentLocale = (l: Locale): Locale => (l === "zh-CN" ? l : "en");
+export const contentLocale = (l: Locale): Locale => l;
 export function translate(
   locale: Locale,
   key: string,
   values: Record<string, string> = {},
 ): string {
   const k = key as Key;
-  const text = dictionaries[locale][k] ?? en[k] ?? en.unavailable;
+  const text =
+    dictionaries[locale][k] ?? en[k] ?? dictionaries[locale].unavailable;
   return text.replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? "");
 }
 export function formatPoints(

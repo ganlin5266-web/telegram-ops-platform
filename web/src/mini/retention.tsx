@@ -1,133 +1,100 @@
-// Phase 2 · Retention + Referral presentation. Everything here renders only
-// values the backend returned; missing contract fields fall back to safe,
-// clearly "not open yet" states and are never inferred or persisted locally.
 import React, { useState } from "react";
 import type { Home, MemberSummary, Page, PrimaryAction } from "./client";
-import { Icon } from "./icons";
 import { formatDate, formatPoints, type Key, type Locale } from "./i18n";
 
 type T = (k: Key, v?: Record<string, string>) => string;
 const isInt = (v?: string | null): v is string => !!v && /^-?\d+$/.test(v);
-
 export function growthGap(m?: MemberSummary): bigint | null {
   if (!isInt(m?.growth) || !isInt(m?.nextThreshold)) return null;
   const gap = BigInt(m!.nextThreshold!) - BigInt(m!.growth!);
   return gap > 0n ? gap : null;
 }
-// Frontend Presentation Threshold only: gap <= 20% of next threshold. It may
-// only drive visual emphasis and the "earn Growth" hint; it never affects
-// Level, Growth, Reward, Eligibility, Qualification or any backend result.
 export function nearLevelUp(m?: MemberSummary): boolean {
   const gap = growthGap(m);
-  if (gap == null || !isInt(m?.nextThreshold)) return false;
-  return gap * 5n <= BigInt(m!.nextThreshold!);
+  return (
+    gap != null &&
+    isInt(m?.nextThreshold) &&
+    gap * 5n <= BigInt(m.nextThreshold)
+  );
 }
-export type CheckinState = "available" | "done" | "pending";
+export type CheckinState = "available" | "done" | "pending" | "capped";
 export function checkinState(m?: MemberSummary): CheckinState {
   if (m?.todayCheckedIn === true) return "done";
-  if (m?.todayCheckinAvailable === false) return "pending";
-  // Contract fields missing: keep the safe fallback (button; backend is idempotent).
-  return "available";
+  if (m?.checkinStatus === "cap_reached") return "capped";
+  // Missing status is unknown. Never infer eligibility from an absent field.
+  if (m?.enabled && m.canCheckin === true && m.checkinStatus === "available")
+    return "available";
+  return "pending";
 }
-
-type Feedback = {
-  delta: string | null;
-  from?: string;
-  to?: string;
-  gap: string | null;
-  nextLevel: number;
-  levelUp: number | null;
-};
-
 export function CheckinPanel({
   t,
   member,
   checkin,
   refresh,
   onInvite,
-  onBenefits,
-  doneView = null,
+  primary = false,
+  locale = "en",
 }: {
-  doneView?: React.ReactNode;
   t: T;
   member?: MemberSummary;
   checkin: () => Promise<unknown>;
   refresh: () => Promise<Home>;
   onInvite: () => void;
-  onBenefits: () => void;
+  primary?: boolean;
+  locale?: Locale;
+  onBenefits?: () => void;
+  doneView?: React.ReactNode;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(false),
-    [fb, setFb] = useState<Feedback>();
+    [completed, setCompleted] = useState(false);
   const state = checkinState(member);
-  if (fb)
-    return (
-      <div className="primary-action feedback" role="status">
-        {fb.levelUp != null ? (
-          <>
-            <span className="levelup-mark" aria-hidden="true">
-              <Icon name="badge" />
-            </span>
-            <strong>{t("p2LevelUp", { level: String(fb.levelUp) })}</strong>
-            <small>{t("p2LevelUpBody")}</small>
-          </>
-        ) : (
-          <strong>{t("p2CheckinDone")}</strong>
-        )}
-        {fb.delta && <b className="gain">+{fb.delta} Growth</b>}
-        {fb.from && fb.to && (
-          <small>{t("p2GrowthChange", { from: fb.from, to: fb.to })}</small>
-        )}
-        {fb.gap && (
-          <small>
-            {t("p2GapTo", { gap: fb.gap, level: String(fb.nextLevel) })}
-          </small>
-        )}
-        {fb.levelUp != null ? (
-          <button onClick={onBenefits}>{t("p2ViewBenefits")}</button>
-        ) : (
-          <button onClick={onInvite}>{t("p2InviteNext")}</button>
-        )}
-      </div>
-    );
-  if (state === "done") return <>{doneView}</>;
+  let nextTime: string | null = null;
+  if (member?.nextAvailableAt && member.businessTimezone) {
+    try {
+      nextTime =
+        new Intl.DateTimeFormat(locale, {
+          dateStyle: "medium",
+          timeStyle: "short",
+          timeZone: member.businessTimezone,
+        }).format(new Date(member.nextAvailableAt)) +
+        ` (${member.businessTimezone})`;
+    } catch {
+      nextTime = null;
+    }
+  }
   return (
-    <div className="primary-action">
+    <section
+      className={`card checkin-panel ${primary ? "primary-action" : ""}`}
+      data-testid="checkin-panel"
+    >
       <div>
-        <strong>{t("checkinTitle")}</strong>
-        <small>{t("checkinBody")}</small>
+        <strong>{t("p0CheckinGrowth")}</strong>
+        <small>{t("growthDifference")}</small>
       </div>
-      {error && <p role="alert">{t("p2CheckinFailed")}</p>}
-      {state === "pending" ? (
-        <p className="pending-note">{t("p2CheckinPending")}</p>
+      {state === "done" ? (
+        <div role="status" data-testid="daily-done">
+          <strong>{t("p2DoneTitle")}</strong>
+          {isInt(member?.actualGrowthEarned) && (
+            <p>{t("p0CheckinEarned", { growth: member.actualGrowthEarned })}</p>
+          )}
+        </div>
+      ) : state === "capped" ? (
+        <p>{t("p0CheckinCap")}</p>
+      ) : state === "pending" ? (
+        <p>{t("p0CheckinUnknown")}</p>
       ) : (
         <button
+          className={primary ? undefined : "secondary"}
           disabled={busy}
           onClick={async () => {
+            if (busy) return;
             setBusy(true);
             setError(false);
-            const before = member;
             try {
               await checkin();
-              const after = (await refresh()).member;
-              const d =
-                isInt(before?.growth) && isInt(after?.growth)
-                  ? BigInt(after!.growth!) - BigInt(before!.growth!)
-                  : null;
-              const gap = growthGap(after);
-              setFb({
-                delta: d != null && d > 0n ? d.toString() : null,
-                from: before?.growth,
-                to: after?.growth,
-                gap: gap?.toString() ?? null,
-                nextLevel: (after?.level ?? 0) + 1,
-                levelUp:
-                  after?.level != null &&
-                  before?.level != null &&
-                  after.level > before.level
-                    ? after.level
-                    : null,
-              });
+              await refresh();
+              setCompleted(true);
             } catch {
               setError(true);
             } finally {
@@ -135,56 +102,40 @@ export function CheckinPanel({
             }
           }}
         >
-          {t("p2CheckinNow")}
+          {t(busy ? "loading" : "p2CheckinNow")}
         </button>
       )}
-    </div>
-  );
-}
-
-export function DailyDone({
-  t,
-  go,
-}: {
-  t: T;
-  go: (to: "activities" | "invite" | "rewards") => void;
-}) {
-  return (
-    <div className="primary-action done" data-testid="daily-done">
-      <div>
-        <strong>{t("p2DoneTitle")}</strong>
-        <small>{t("p2DoneBody")}</small>
-      </div>
-      <div className="light-links">
-        <button onClick={() => go("activities")}>
-          {t("p2ViewActivities")}
+      {member?.checkinStatus === "cap_reached" && state === "done" && (
+        <p>{t("p0CheckinCap")}</p>
+      )}
+      {nextTime && <small>{t("p0NextCheckin", { time: nextTime })}</small>}
+      {error && <p role="alert">{t("p2CheckinFailed")}</p>}
+      {completed && (
+        <button className="text-button" onClick={onInvite}>
+          {t("actionInvite")}
         </button>
-        <button onClick={() => go("invite")}>{t("actionInvite")}</button>
-        <button onClick={() => go("rewards")}>{t("p2ViewRewards")}</button>
-      </div>
-    </div>
+      )}
+    </section>
   );
 }
-
-// Backend-selected primary action (BACKEND_PENDING). The frontend only maps
-// the returned type to a destination; it never ranks economic priority itself.
 const primaryMap: Record<
-  PrimaryAction,
-  { title: Key; cta: Key; to: "membership" | "invite" | "rewards" | "bind" }
+  PrimaryAction["kind"],
+  {
+    title: Key;
+    cta: Key;
+    to: "invite" | "rewards" | "bind" | "records" | "checkin";
+  }
 > = {
-  checkin: { title: "checkinTitle", cta: "p2CheckinNow", to: "membership" },
+  view_code: { title: "viewCode", cta: "viewCode", to: "rewards" },
+  redeem: { title: "redeemCentre", cta: "redeemNow", to: "rewards" },
+  bind_uid: { title: "actionBind", cta: "bindCta", to: "bind" },
+  view_identity: { title: "uidPending", cta: "p0ReviewUid", to: "bind" },
+  checkin: { title: "p0CheckinGrowth", cta: "p2CheckinNow", to: "checkin" },
   invite: { title: "actionInvite", cta: "inviteCta", to: "invite" },
-  earn_growth: { title: "growthWays", cta: "p2EarnGrowth", to: "membership" },
-  redeem_points: { title: "rewardCentre", cta: "p2ViewRewards", to: "rewards" },
-  bind_platform: { title: "actionBind", cta: "bindCta", to: "bind" },
-  member_benefits: {
-    title: "currentBenefits",
-    cta: "p2ViewBenefits",
-    to: "membership",
-  },
+  view_records: { title: "p0ViewRecords", cta: "p0ViewRecords", to: "records" },
 };
-export function isKnownPrimary(a?: string | null): a is PrimaryAction {
-  return !!a && a in primaryMap;
+export function isKnownPrimary(a?: PrimaryAction | null): a is PrimaryAction {
+  return !!a && typeof a === "object" && a.kind in primaryMap;
 }
 export function BackendPrimary({
   t,
@@ -193,133 +144,22 @@ export function BackendPrimary({
 }: {
   t: T;
   action: PrimaryAction;
-  go: (to: "membership" | "invite" | "rewards" | "bind") => void;
+  go: (to: string, orderId?: string) => void;
 }) {
-  const m = primaryMap[action];
+  const m = primaryMap[action.kind];
   return (
-    <div className="primary-action">
-      <div>
-        <strong>{t(m.title)}</strong>
-      </div>
-      <button onClick={() => go(m.to)}>{t(m.cta)}</button>
-    </div>
+    <section className="primary-action" data-testid="primary-action">
+      <strong>{t(m.title)}</strong>
+      <button onClick={() => go(m.to, action.orderId)}>{t(m.cta)}</button>
+    </section>
   );
 }
-
-type Way = {
-  key: string;
-  icon: string;
-  title: Key;
-  what: Key;
-  gain: Key;
-  group: "best" | "available" | "done" | "pending";
-  status: Key;
-  cta?: () => void;
-};
-export function GrowthWays({
-  t,
-  member,
-  memberOn,
-  platformVerified,
-  onCheckin,
-  onInvite,
-  onBind,
-}: {
-  t: T;
-  member?: MemberSummary;
-  memberOn: boolean;
-  platformVerified?: boolean;
-  onCheckin: () => void;
-  onInvite: () => void;
-  onBind: () => void;
-}) {
-  const ci = memberOn ? checkinState(member) : "pending";
-  const ways: Way[] = [
-    {
-      key: "checkin",
-      icon: "check",
-      title: "p2WayCheckin",
-      what: "p2WayCheckinDo",
-      gain: "p2GainGrowth",
-      group: ci === "done" ? "done" : ci === "available" ? "best" : "pending",
-      status:
-        ci === "done"
-          ? "p2Completed"
-          : ci === "available"
-            ? "p2Available"
-            : "p2NotOpen",
-      cta: ci === "available" ? onCheckin : undefined,
-    },
-    {
-      key: "invite",
-      icon: "users",
-      title: "actionInvite",
-      what: "p2WayInviteDo",
-      gain: "p2GainPending",
-      group: ci === "available" ? "available" : "best",
-      status: "p2Available",
-      cta: onInvite,
-    },
-    {
-      key: "platform",
-      icon: "link",
-      title: "wayPlatform",
-      what: "p2WayPlatformDo",
-      gain: "p2GainPending",
-      group: platformVerified ? "done" : "available",
-      status: platformVerified ? "p2Completed" : "p2Available",
-      cta: platformVerified ? undefined : onBind,
-    },
-  ];
-  const groups = [
-    ["best", "p2Best"],
-    ["available", "p2Available"],
-    ["done", "p2Completed"],
-    ["pending", "p2NotOpen"],
-  ] as const;
-  return (
-    <div className="growth-ways" data-testid="growth-ways">
-      {groups.map(([g, label]) => {
-        const items = ways.filter((w) => w.group === g);
-        if (!items.length) return null;
-        return (
-          <section key={g} className={`way-group ${g}`}>
-            <h3>{t(label)}</h3>
-            {items.map((w) => (
-              <article className="way" key={w.key} data-way={w.key}>
-                <span className="tile-icon">
-                  <Icon name={w.icon} />
-                </span>
-                <span className="way-body">
-                  <strong>{t(w.title)}</strong>
-                  <small>{t(w.what)}</small>
-                  <small className="way-gain">{t(w.gain)}</small>
-                </span>
-                {w.cta ? (
-                  <button onClick={w.cta}>{t("p2Go")}</button>
-                ) : (
-                  <span className={`way-status ${g}`}>{t(w.status)}</span>
-                )}
-              </article>
-            ))}
-          </section>
-        );
-      })}
-    </div>
-  );
-}
-
 const referralStatus: Record<string, Key> = {
-  invited: "p2RsInvited",
-  registered: "p2RsRegistered",
-  bound: "bound",
-  qualified: "qualified",
-  rewarded: "p2RsRewarded",
-  invalid: "invalid",
   pending: "pending",
+  rewarded: "p2RsRewarded",
+  cap_exceeded: "p0CapExceeded",
+  review_required: "p0ReviewRequired",
 };
-const rewardDone = new Set(["rewarded", "granted", "success", "posted"]);
-
 export function InviteJourney({
   t,
   locale,
@@ -327,6 +167,7 @@ export function InviteJourney({
   page,
   busy,
   more,
+  onCheckin,
 }: {
   t: T;
   locale: Locale;
@@ -334,81 +175,109 @@ export function InviteJourney({
   page?: Page;
   busy: boolean;
   more: () => void;
+  onCheckin?: () => void;
 }) {
   const r = home.referral;
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
   );
-  const earned = r?.pointsEarned ?? r?.growthEarned;
-  const hasStats =
-    isInt(r?.qualifiedToday) ||
-    isInt(earned) ||
-    isInt(r?.qualifiedTotal) ||
-    isInt(r?.remainingRewardChances);
+  // Only Telegram deep links from the authenticated backend are shareable.
+  const canShare =
+    !!r?.shareUrl &&
+    /^https:\/\/t\.me\/[A-Za-z0-9_]+\?start=ref_[A-Za-z0-9_-]+$/.test(
+      r.shareUrl,
+    );
   const share = () => {
-    const url = r?.shareUrl;
-    if (!url || !/^https:\/\//.test(url)) return;
-    const link = "https://t.me/share/url?url=" + encodeURIComponent(url);
+    if (!canShare) return;
+    const link =
+      "https://t.me/share/url?url=" + encodeURIComponent(r!.shareUrl!);
     const tg = window.Telegram?.WebApp as
-      { openTelegramLink?: (u: string) => void } | undefined;
+      { openTelegramLink?: (url: string) => void } | undefined;
     if (tg?.openTelegramLink) tg.openTelegramLink(link);
-    else window.open(link, "_blank", "noopener");
+    else window.open(link, "_blank", "noopener,noreferrer");
   };
   const copy = async () => {
-    const url = r?.shareUrl;
-    if (!url || !/^https:\/\//.test(url)) return;
+    if (!canShare) return;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(r!.shareUrl!);
       setCopyState("copied");
     } catch {
       setCopyState("failed");
     }
   };
-  const canShare = !!r?.shareUrl && /^https:\/\//.test(r.shareUrl);
   return (
     <>
       <section className="hero invite-hero" data-testid="invite-hero">
         <span className="pill">{t("friends")}</span>
-        {hasStats ? (
+        {r?.activity && r.rewardEligible ? (
+          <div className="invite-offer">
+            <strong>
+              {t("p0InviterReward", { points: r.activity.inviterPoints })}
+            </strong>
+            {r.activity.inviteeEnabled && (
+              <p>
+                {t("p0InviteeReward", { points: r.activity.inviteePoints })}
+              </p>
+            )}
+            <small>{t("p2ShareNote")}</small>
+          </div>
+        ) : (
+          <div className="pending-note">
+            <p>
+              {t(
+                r?.rewardAvailability === "member_required"
+                  ? "p0MemberPending"
+                  : r?.activity
+                    ? "p0RewardInactive"
+                    : "p0NoActivity",
+              )}
+            </p>
+            {r?.rewardAvailability === "member_required" &&
+              home.member?.canCheckin === true &&
+              onCheckin && (
+                <button className="text-button" onClick={onCheckin}>
+                  {t("p0CheckinGrowth")}
+                </button>
+              )}
+          </div>
+        )}
+        {r ? (
           <div className="invite-progress">
-            {isInt(r?.qualifiedToday) && (
+            {isInt(r.rewardedToday) && (
               <div>
-                <small>{t("p2TodayQualified")}</small>
+                <small>{t("p0RewardedToday")}</small>
                 <strong>
-                  {formatPoints(r!.qualifiedToday!, locale)}
-                  {isInt(r?.dailyRewardLimit) && (
-                    <span> / {formatPoints(r!.dailyRewardLimit!, locale)}</span>
-                  )}
+                  {formatPoints(r.rewardedToday, locale)} /{" "}
+                  {r.dailyCap ?? r.dailyRewardLimit ?? "—"}
                 </strong>
               </div>
             )}
-            {isInt(earned) && (
+            {isInt(r.pendingCount) && (
               <div>
-                <small>
-                  {r?.pointsEarned ? t("p2PointsEarned") : t("p2GrowthEarned")}
-                </small>
-                <strong>{formatPoints(earned, locale)}</strong>
+                <small>{t("p0PendingInvites")}</small>
+                <strong>{formatPoints(r.pendingCount, locale)}</strong>
               </div>
             )}
-            {isInt(r?.remainingRewardChances) && (
+            {isInt(r.pointsEarned) && (
               <div>
-                <small>{t("p2Remaining")}</small>
-                <strong>
-                  {formatPoints(r!.remainingRewardChances!, locale)}
-                </strong>
+                <small>{t("p2PointsEarned")}</small>
+                <strong>{formatPoints(r.pointsEarned, locale)}</strong>
               </div>
             )}
           </div>
         ) : (
-          <p className="pending-note" data-testid="referral-pending">
-            {t("p2ReferralPending")}
-          </p>
+          <p data-testid="referral-pending">{t("p2ReferralPending")}</p>
+        )}
+        {r?.businessDate && (
+          <small>
+            {r.businessDate} · {r.businessTimezone}
+          </small>
         )}
         {canShare ? (
           <div className="invite-actions">
             <button onClick={share}>{t("inviteShare")}</button>
             <button className="secondary" onClick={() => void copy()}>
-              {copyState === "copied" ? t("inviteCopied") : t("inviteCopy")}
+              {t(copyState === "copied" ? "inviteCopied" : "inviteCopy")}
             </button>
             {copyState === "failed" && (
               <small role="alert">{t("inviteCopyFailed")}</small>
@@ -418,25 +287,13 @@ export function InviteJourney({
           <button disabled>{t("p2ShareSoon")}</button>
         )}
       </section>
-      <div className="summary invite-summary">
-        <div>
-          <strong>{formatPoints(home.invitedCount, locale)}</strong>
-          <span>{t("invited")}</span>
-        </div>
-        {isInt(r?.qualifiedTotal) && (
-          <div>
-            <strong>{formatPoints(r!.qualifiedTotal!, locale)}</strong>
-            <span>{t("p2QualifiedTotal")}</span>
-          </div>
-        )}
-      </div>
       <section className="card history">
         <h2>{t("inviteHistory")}</h2>
-        {!page && busy && <div className="skeleton" aria-hidden="true" />}
+        {!page && busy && <p>{t("loading")}</p>}
         {page?.items.length === 0 && (
           <div className="empty-small">
             <h3>{t("inviteEmpty")}</h3>
-            <p className="muted">{t("inviteHint")}</p>
+            <p>{t("inviteHint")}</p>
           </div>
         )}
         {page?.items.map((row, i) => (
@@ -447,16 +304,9 @@ export function InviteJourney({
               </strong>
               <small>{formatDate(row.created_at, locale)}</small>
             </div>
-            <div>
-              {row.status && referralStatus[row.status] && (
-                <span className={`rs rs-${row.status}`}>
-                  {t(referralStatus[row.status])}
-                </span>
-              )}
-              {row.reward_status && rewardDone.has(row.reward_status) && (
-                <small className="positive">{t("p2RsRewarded")}</small>
-              )}
-            </div>
+            <span>
+              {t(referralStatus[row.displayStatus ?? ""] ?? "p0ReviewRequired")}
+            </span>
           </article>
         ))}
         {page?.nextCursor && (
@@ -465,27 +315,17 @@ export function InviteJourney({
           </button>
         )}
       </section>
-      <section className="card">
-        <h2>{t("p2StepsTitle")}</h2>
-        <ol className="journey steps5">
-          {(
-            [
-              "journey1",
-              "p2StepRegister",
-              "p2StepBind",
-              "p2StepQualify",
-              "p2StepReward",
-            ] as const
-          ).map((k) => (
-            <li key={k}>{t(k)}</li>
-          ))}
+      <details className="card">
+        <summary>{t("p0InvitationRules")}</summary>
+        <ol className="journey">
+          <li>{t("journey1")}</li>
+          <li>{t("p2StepBind")}</li>
+          <li>{t("p2StepQualify")}</li>
+          <li>{t("p2StepReward")}</li>
         </ol>
-        <p className="muted">{t("p2ShareNote")}</p>
-      </section>
-      <div className="placeholder-row card">
-        <span>{t("rules")}</span>
-        <small>{t("rulesUnpublished")}</small>
-      </div>
+        <p>{t("p2ShareNote")}</p>
+        <p>{t("p0UidNoGuaranteedReward")}</p>
+      </details>
     </>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { MemberSummary } from "./client";
+import { translate, type Key, type Locale } from "./i18n";
 
 // Growth values are integer strings from the server; BigInt avoids precision loss.
 function growthGap(growth?: string, next?: string | null): string | null {
@@ -22,21 +23,23 @@ export function MemberCard({
   history?: (after?: string) => Promise<any>;
   onEarn?: () => void;
 }) {
-  const zh = locale === "zh-CN",
-    [rows, setRows] = useState<any[]>([]),
+  const t = (k: Key, values?: Record<string, string>) =>
+    translate(locale as Locale, k, values);
+  const [rows, setRows] = useState<any[]>([]),
     [next, setNext] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [loaded, setLoaded] = useState(false);
   async function load(after?: string) {
     setBusy(true);
+    setError("");
     try {
       const r = await history?.(after);
       setRows(after ? [...rows, ...r.items] : r.items);
       setNext(r.next);
       setLoaded(true);
     } catch {
-      setError(zh ? "暂时无法读取，请重试" : "Unable to load. Please retry.");
+      setError(t("request"));
     } finally {
       setBusy(false);
     }
@@ -44,13 +47,9 @@ export function MemberCard({
   if (!member?.enabled || !member.available)
     return (
       <section className="member-pass pending">
-        <span className="pass-chip">{zh ? "会员" : "Member"}</span>
-        <h2>{zh ? "会员成长尚未启用" : "Member Growth is not enabled"}</h2>
-        <p>
-          {zh
-            ? "开通后将在这里展示你的真实等级和成长值。"
-            : "Your level and Growth will appear here when available."}
-        </p>
+        <span className="pass-chip">{t("membership")}</span>
+        <h2>{t(member?.enabled ? "p0MemberPending" : "p0MemberDisabled")}</h2>
+        <p>{t("p0MemberDisabledBody")}</p>
       </section>
     );
   const gap = growthGap(member.growth, member.nextThreshold);
@@ -72,7 +71,7 @@ export function MemberCard({
       <div
         className="pass-bar"
         role="progressbar"
-        aria-label={zh ? "升级进度" : "Level progress"}
+        aria-label={t("p0LevelProgress")}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={pct}
@@ -85,30 +84,22 @@ export function MemberCard({
       <p className="pass-next">
         {member.nextThreshold
           ? gap
-            ? zh
-              ? `还差 ${gap} Growth 升级 LV${nextLevel}`
-              : `${gap} Growth to reach LV${nextLevel}`
-            : zh
-              ? `已达到 LV${nextLevel} 门槛，等待等级更新`
-              : `LV${nextLevel} threshold reached, level update pending`
-          : zh
-            ? "已达最高等级，成长值继续累计"
-            : "Highest level reached. Growth continues to accumulate."}
+            ? t("p2GapTo", { gap, level: String(nextLevel) })
+            : t("p0LevelPending", { level: String(nextLevel) })
+          : t("p0HighestLevel")}
       </p>
       {onEarn && gap && (
         <button className="pass-earn" onClick={onEarn}>
-          {zh ? "去赚 Growth" : "Earn Growth"}
+          {t("p2EarnGrowth")}
         </button>
       )}
       {member.todayGrowth != null && (
         <p className="pass-today">
-          {zh ? "今日获得" : "Earned today"} +{member.todayGrowth} Growth
+          {t("p0EarnedToday")} +{member.todayGrowth} Growth
         </p>
       )}
       {history && member.protected && (
-        <p className="pass-note">
-          {zh ? "你的会员等级已保留" : "Your member level has been kept"}
-        </p>
+        <p className="pass-note">{t("levelProtected")}</p>
       )}
       {error && <p role="alert">{error}</p>}
       {history && (
@@ -117,12 +108,10 @@ export function MemberCard({
           disabled={busy}
           onClick={() => void load()}
         >
-          {zh ? "成长记录" : "Growth history"}
+          {t("p0GrowthHistory")}
         </button>
       )}
-      {loaded && !rows.length && (
-        <p>{zh ? "暂无成长记录" : "No Growth history yet"}</p>
-      )}
+      {loaded && !rows.length && <p>{t("p0GrowthEmpty")}</p>}
       {rows.length > 0 && (
         <ul className="pass-history">
           {rows.map((r) => (
@@ -138,7 +127,7 @@ export function MemberCard({
           disabled={busy}
           onClick={() => void load(next)}
         >
-          {zh ? "加载更多" : "Load more"}
+          {t("more")}
         </button>
       )}
     </section>
@@ -160,8 +149,8 @@ export function CheckinAction({
   title: string;
   body: string;
 }) {
-  const zh = locale === "zh-CN",
-    [busy, setBusy] = useState(false),
+  const t = (k: Key) => translate(locale as Locale, k);
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [done, setDone] = useState(false);
   return (
@@ -171,13 +160,7 @@ export function CheckinAction({
         <small>{body}</small>
       </div>
       {error && <p role="alert">{error}</p>}
-      {done && (
-        <p role="status">
-          {zh
-            ? "签到已提交，成长值已刷新"
-            : "Check-in submitted. Growth refreshed."}
-        </p>
-      )}
+      {done && <p role="status">{t("p0CheckinSubmitted")}</p>}
       <button
         disabled={busy}
         onClick={async () => {
@@ -189,17 +172,13 @@ export function CheckinAction({
             await onUpdated?.();
             setDone(true);
           } catch {
-            setError(
-              zh
-                ? "签到暂未完成，请重试"
-                : "Check-in was not completed. Please retry.",
-            );
+            setError(t("p2CheckinFailed"));
           } finally {
             setBusy(false);
           }
         }}
       >
-        {zh ? "每日签到" : "Daily check-in"}
+        {t("p0CheckinGrowth")}
       </button>
     </div>
   );

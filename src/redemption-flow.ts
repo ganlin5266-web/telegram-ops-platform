@@ -5,31 +5,116 @@ import {
   type Queryable,
   type Scope,
 } from "./db.js";
+import { pointSummary } from "./point-lots.js";
 import { postPoints } from "./points.js";
 import type { MiniPrincipal } from "./mini-sessions.js";
 import type { Principal } from "./auth.js";
 import { authorize } from "./auth.js";
 import type { RedemptionCodeVault } from "./redemption-vault.js";
 
-export async function redemptionCatalogue(db: Database, p: MiniPrincipal) {
+export async function redemptionCatalogue(
+  db: Database,
+  p: MiniPrincipal,
+  platformId?: string,
+) {
+  let balance: string | null = null;
+  try {
+    balance = (await pointSummary(db, p)).availableBalance;
+  } catch (error) {
+    if (
+      !(
+        error instanceof DomainError &&
+        error.code === "point_lot_cutover_required"
+      ) ||
+      (
+        await db.query(
+          "SELECT id FROM point_accounts WHERE brand_id=$1 AND bot_id=$2 AND user_id=$3",
+          [p.brandId, p.botId, p.userId],
+        )
+      ).rows.length
+    )
+      throw error;
+  }
+  const member = (
+    await db.query(
+      "SELECT member_id FROM member_user_links WHERE brand_id=$1 AND bot_id=$2 AND user_id=$3",
+      [p.brandId, p.botId, p.userId],
+    )
+  ).rows[0];
   const rows = (
     await db.query(
-      `SELECT r.id,r.platform_id,r.tier_key,r.name,
-  r.points_cost::text,r.face_value::text,r.face_currency,p.display_name,
-  p.redemption_url,count(c.id) FILTER(WHERE c.status='available'
-   AND (c.expires_at IS NULL OR c.expires_at>now()))::int AS available
- FROM redemption_rules r JOIN platforms p ON (p.brand_id,p.id)=(r.brand_id,r.platform_id)
- LEFT JOIN redemption_codes c ON c.brand_id=r.brand_id AND c.bot_id=r.bot_id
-  AND c.platform_id=r.platform_id AND c.rule_id=r.id
- WHERE r.brand_id=$1 AND r.bot_id=$2 AND r.status='published' AND r.enabled
-  AND p.status='active'
-  AND r.effective_from<=(now() AT TIME ZONE p.timezone)::date
-  AND (r.effective_until IS NULL OR r.effective_until>=(now() AT TIME ZONE p.timezone)::date)
- GROUP BY r.id,p.id ORDER BY p.display_name,r.points_cost,r.id`,
-      [p.brandId, p.botId],
+      `SELECT r.id,r.platform_id,r.tier_key,r.name,r.points_cost::text,r.face_value::text,r.face_currency,
+    r.mode,r.requires_deposit,r.conditions,r.daily_count_limit,r.daily_points_limit::text,
+    pl.display_name,pl.timezone,pl.redemption_url,(now() AT TIME ZONE pl.timezone)::date::text AS business_date,
+    (SELECT count(*)::int FROM redemption_codes c WHERE c.brand_id=r.brand_id AND c.bot_id=r.bot_id AND c.platform_id=r.platform_id AND c.rule_id=r.id
+      AND c.status='available' AND (c.expires_at IS NULL OR c.expires_at>now())) AS available,
+    (SELECT count(*)::int FROM redemptions o WHERE o.brand_id=r.brand_id AND o.platform_id=r.platform_id AND o.member_id=$3
+      AND o.business_date=(now() AT TIME ZONE pl.timezone)::date AND o.status<>'refunded') AS used_today,
+    (SELECT coalesce(sum(o.points_cost),0)::text FROM redemptions o WHERE o.brand_id=r.brand_id AND o.platform_id=r.platform_id AND o.member_id=$3
+      AND o.business_date=(now() AT TIME ZONE pl.timezone)::date AND o.status<>'refunded') AS points_used_today
+   FROM redemption_rules r JOIN platforms pl ON (pl.brand_id,pl.id)=(r.brand_id,r.platform_id)
+   WHERE r.brand_id=$1 AND r.bot_id=$2 AND r.status='published' AND r.enabled AND pl.status='active'
+    AND ($4::uuid IS NULL OR r.platform_id=$4)
+    AND r.effective_from<=(now() AT TIME ZONE pl.timezone)::date
+    AND (r.effective_until IS NULL OR r.effective_until>=(now() AT TIME ZONE pl.timezone)::date)
+   ORDER BY pl.display_name,r.points_cost,r.id`,
+      [p.brandId, p.botId, member?.member_id ?? null, platformId ?? null],
     )
   ).rows;
-  return { items: rows };
+  return {
+    items: rows.map((data: any) => {
+      const {
+        mode,
+        requires_deposit,
+        conditions,
+        daily_count_limit,
+        daily_points_limit,
+        used_today,
+        points_used_today,
+        ...row
+      } = data;
+      const unsupported =
+        mode !== "fixed" ||
+        requires_deposit ||
+        daily_count_limit !== 1 ||
+        daily_points_limit !== "300" ||
+        BigInt(row.points_cost) > 300n ||
+        Object.keys(conditions).length > 0;
+      const gap =
+        balance === null
+          ? null
+          : BigInt(row.points_cost) > BigInt(balance)
+            ? String(BigInt(row.points_cost) - BigInt(balance))
+            : "0";
+      const unavailableReason = unsupported
+        ? "redemption_rule_unsupported"
+        : !member
+          ? "member_unavailable"
+          : balance === null
+            ? "account_unavailable"
+            : used_today >= 1 ||
+                BigInt(points_used_today) + BigInt(row.points_cost) > 300n
+              ? "daily_redemption_limit"
+              : row.available === 0
+                ? "inventory_empty"
+                : gap !== "0"
+                  ? "insufficient_points"
+                  : null;
+      return {
+        ...row,
+        balance,
+        pointsGap: gap,
+        canRedeem: unavailableReason === null,
+        unavailableReason,
+        usedToday: used_today,
+        pointsUsedToday: points_used_today,
+        dailyCountLimit: 1,
+        dailyPointsLimit: "300",
+        memberAvailable: !!member,
+        accountAvailable: balance !== null,
+      };
+    }),
+  };
 }
 
 export async function createFixedRedemption(

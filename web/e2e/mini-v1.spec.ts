@@ -51,7 +51,13 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
             botName: "P1 Test Bot",
             uiLanguage: "zh-CN",
           },
-          member: { enabled: false, available: false },
+          member: {
+            enabled: false,
+            available: false,
+            canCheckin: false,
+            checkinStatus: "unavailable",
+          },
+          primaryAction: { kind: "view_records" },
           points: { accountExists: false, balance: null },
           invitedCount: "0",
           redemptionCount: "0",
@@ -79,6 +85,14 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
               display_name: "FUN66",
               redemption_url: "https://example.test/redeem",
               available: 1,
+              balance: "100",
+              pointsGap: "0",
+              canRedeem: true,
+              unavailableReason: null,
+              usedToday: 0,
+              pointsUsedToday: "0",
+              dailyCountLimit: 1,
+              dailyPointsLimit: "300",
             },
           ],
         },
@@ -120,19 +134,16 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
     await expect(card.locator(".pass-top")).toHaveCount(0);
     await expect(card.getByRole("progressbar")).toHaveCount(0);
   };
-  await expectMemberGrowthDisabled();
-  await expect(page.getByTestId("today-focus")).not.toContainText(
-    "暂无积分账户",
-  );
-  await expect(
-    page.getByTestId("today-focus").getByRole("button", { name: "会员" }),
-  ).toBeVisible();
-  // Mini Phase 1 moved 小游戏 from a home shortcut into the bottom navigation.
+  // P0 keeps unopened games/tasks out of navigation and moves membership to Me.
+  await expect(page.getByRole("navigation").getByRole("button")).toHaveCount(4);
+  await expect(page.getByRole("navigation")).not.toContainText("小游戏");
+  await expect(page.getByTestId("today-focus")).toContainText("Points");
   await page
     .getByRole("navigation")
-    .getByRole("button", { name: "小游戏", exact: true })
+    .getByRole("button", { name: "我的", exact: true })
     .click();
-  await expect(page.getByRole("heading", { name: "小游戏" })).toBeVisible();
+  await page.getByRole("button", { name: "会员 · Growth" }).click();
+  await expectMemberGrowthDisabled();
   await page
     .getByRole("navigation")
     .getByRole("button", { name: "首页", exact: true })
@@ -157,31 +168,16 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
       path: process.env.MINI_UI_SCREENSHOT,
       fullPage: true,
     });
-  for (const tab of ["会员", "活动", "小游戏", "奖励", "邀请", "我的"]) {
-    if (tab === "奖励" || tab === "邀请") {
-      await page
-        .getByRole("navigation")
-        .getByRole("button", { name: "我的", exact: true })
-        .click();
-      await page
-        .getByRole("button", {
-          name: tab === "奖励" ? "我的积分" : "邀请记录",
-          exact: true,
-        })
-        .click();
-    } else
-      await page
-        .getByRole("navigation")
-        .getByRole("button", { name: tab, exact: true })
-        .click();
+  for (const tab of ["奖励", "邀请", "我的"]) {
+    await page
+      .getByRole("navigation")
+      .getByRole("button", { name: tab, exact: true })
+      .click();
     await expect(
       page.getByRole("heading", { name: tab, exact: true }),
     ).toBeVisible();
-    if (tab === "会员") await expectMemberGrowthDisabled();
-    if (tab === "活动") {
-      await expect(page.getByText("活动即将上线")).toBeVisible();
-    }
     if (tab === "奖励") {
+      await page.getByRole("button", { name: "积分明细", exact: true }).click();
       await expect(page.getByText("还没有积分记录")).toBeVisible();
       await page.getByRole("button", { name: "我的兑换", exact: true }).click();
       await expect(page.getByText("还没有兑换记录")).toBeVisible();
@@ -241,7 +237,7 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
 
   await page.getByRole("button", { name: /语言 ·?|语言 简体中文/ }).click();
   await page.getByRole("button", { name: "English", exact: true }).click();
-  await expect(page.getByRole("navigation")).toContainText("Member");
+  await expect(page.getByRole("navigation")).toContainText("Rewards");
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Hello, 测试用户" }),
@@ -255,11 +251,12 @@ test("Mini V1 mobile navigation, empty data, reload recovery and logout", async 
   await page
     .getByRole("button", { name: "Português (Brasil)", exact: true })
     .click();
+  await expect(page.getByRole("navigation")).toContainText("Convites");
   await expect(
     page.getByText(
       "Full translation is being prepared. English is shown for now.",
     ),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "简体中文", exact: true }).click();
   await page.getByRole("button", { name: "退出登录", exact: true }).click();
   await expect(page.getByRole("heading", { name: "已安全退出" })).toBeVisible();

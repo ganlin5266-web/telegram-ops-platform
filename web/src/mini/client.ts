@@ -16,6 +16,7 @@ export class MiniError extends Error {
     public kind: Failure,
     public status = 0,
     public requestId?: string,
+    public code?: string,
   ) {
     super(kind);
   }
@@ -31,12 +32,37 @@ export type MemberSummary = {
   protected?: boolean;
   todayGrowth?: string;
   dailyCap?: number;
-  // BACKEND_CHANGE_REQUIRED (proposed, optional): rendered only when present.
+  actualGrowthEarned?: string | null;
+  nextAvailableAt?: string | null;
+  businessTimezone?: string;
+  businessDate?: string;
+  checkinReward?: string | null;
+  checkinStatus?: "available" | "checked_in" | "cap_reached" | "unavailable";
+  canCheckin?: boolean;
   todayCheckedIn?: boolean;
   todayCheckinAvailable?: boolean;
 };
 // BACKEND_PENDING (proposed, optional): see BACKEND_API_REQUIREMENTS.md.
 export type ReferralSummary = {
+  platformId?: string;
+  businessDate?: string;
+  businessTimezone?: string;
+  rewardedToday?: string;
+  pendingCount?: string;
+  capExceededCount?: string;
+  dailyCap?: number;
+  activity?: {
+    inviterPoints: string;
+    inviteePoints: string;
+    inviteeEnabled: boolean;
+  } | null;
+  rewardEligible?: boolean;
+  rewardAvailability?:
+    | "available"
+    | "disabled"
+    | "out_of_scope"
+    | "no_activity"
+    | "member_required";
   qualifiedToday?: string;
   dailyRewardLimit?: string;
   qualifiedTotal?: string;
@@ -46,14 +72,33 @@ export type ReferralSummary = {
   remainingRewardChances?: string;
   shareUrl?: string | null;
 };
-export type PrimaryAction =
-  | "checkin"
-  | "invite"
-  | "earn_growth"
-  | "redeem_points"
-  | "bind_platform"
-  | "member_benefits";
+export type PrimaryAction = {
+  kind:
+    | "view_code"
+    | "redeem"
+    | "bind_uid"
+    | "view_identity"
+    | "checkin"
+    | "invite"
+    | "view_records";
+  platformId?: string;
+  orderId?: string;
+  ruleId?: string;
+};
+export type HomePlatform = {
+  id: string;
+  displayName: string;
+  timezone: string;
+};
 export type Home = {
+  platforms?: HomePlatform[];
+  currentPlatform?: HomePlatform | null;
+  identity?: {
+    status:
+      "unbound" | "pending" | "verified" | "rejected" | "conflict" | "revoked";
+  };
+  recommendedRedemption?: RedemptionTier | null;
+  recentOrders?: Row[];
   member?: MemberSummary;
   profile: {
     displayName: string;
@@ -84,6 +129,7 @@ export type Row = {
   business_type?: string;
   status?: string;
   reward_status?: string;
+  displayStatus?: "pending" | "rewarded" | "cap_exceeded" | "review_required";
   points_cost?: string;
 };
 export type Page = { items: Row[]; nextCursor: string | null };
@@ -98,6 +144,14 @@ export type RedemptionTier = {
   display_name: string;
   redemption_url: string | null;
   available: number;
+  balance?: string | null;
+  pointsGap?: string | null;
+  canRedeem?: boolean;
+  unavailableReason?: string | null;
+  usedToday?: number;
+  pointsUsedToday?: string;
+  dailyCountLimit?: number;
+  dailyPointsLimit?: string;
 };
 export type RedemptionReveal = {
   id: string;
@@ -179,6 +233,9 @@ export function createClient(send: typeof fetch = fetch) {
         )[r.status] ?? (r.status >= 500 ? "server" : "request"),
         r.status,
         id,
+        typeof json.error === "string" && /^[a-z_]{1,80}$/.test(json.error)
+          ? json.error
+          : undefined,
       );
     }
     return json;
@@ -249,8 +306,11 @@ export function createClient(send: typeof fetch = fetch) {
         "/member/growth" + (after ? "?after=" + encodeURIComponent(after) : ""),
       ),
     memberCheckin: () => call("/member/checkin", "POST", {}),
-    redemptionTiers: () =>
-      call("/redemption-tiers") as Promise<{ items: RedemptionTier[] }>,
+    redemptionTiers: (platformId?: string) =>
+      call(
+        "/redemption-tiers" +
+          (platformId ? "?platformId=" + encodeURIComponent(platformId) : ""),
+      ) as Promise<{ items: RedemptionTier[] }>,
     createRedemption: (ruleId: string, key: string) =>
       call("/redemption-orders", "POST", { ruleId }, token, false, {
         "X-Mini-CSRF": "1",
@@ -269,13 +329,26 @@ export function createClient(send: typeof fetch = fetch) {
       call(
         `/redemption-orders/${encodeURIComponent(id)}/code`,
       ) as Promise<RedemptionReveal>,
-    home: () => call("/home") as Promise<Home>,
+    home: (platformId?: string) =>
+      call(
+        "/home" +
+          (platformId ? "?platformId=" + encodeURIComponent(platformId) : ""),
+      ) as Promise<Home>,
     page: (
       kind: "point-ledger" | "referrals" | "redemptions",
       cursor?: string,
+      platformId?: string,
     ) =>
       call(
-        "/" + kind + (cursor ? "?cursor=" + encodeURIComponent(cursor) : ""),
+        "/" +
+          kind +
+          (cursor || (kind === "referrals" && platformId)
+            ? "?" +
+              new URLSearchParams({
+                ...(cursor ? { cursor } : {}),
+                ...(kind === "referrals" && platformId ? { platformId } : {}),
+              }).toString()
+            : ""),
       ) as Promise<Page>,
     async logout() {
       const old = token;

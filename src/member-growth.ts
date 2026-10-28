@@ -846,68 +846,123 @@ export async function adjustGrowth(
     return l;
   });
 }
+/** Read model only: refreshing Mini never initializes a Member or changes a level. */
 export async function miniMemberSummary(
   db: Database,
   s: Scope & { userId: string },
   now = new Date(),
 ) {
-  if (!memberGrowthEnabled() || !(await memberSchema(db)))
-    return { enabled: false, available: false };
-  return db.transaction(async (tx) => {
-    const m = await initializeMember(tx, s, now),
-      policy = await memberPolicy(tx, s.brandId, now),
-      day = dateInZone(now, policy.config.timezone);
-    await one(
-      tx,
-      "SELECT member_id FROM growth_accounts WHERE member_id=$1 FOR UPDATE",
-      [m.id],
+  const unavailable = {
+    enabled: memberGrowthEnabled(),
+    available: false,
+    todayCheckedIn: false,
+    actualGrowthEarned: null,
+    nextAvailableAt: null,
+    businessTimezone: null,
+    businessDate: null,
+    checkinReward: null,
+    checkinStatus: "unavailable",
+    canCheckin: false,
+  };
+  if (!memberGrowthEnabled() || !(await memberSchema(db))) return unavailable;
+  let policy: any, rule: any;
+  try {
+    policy = await memberPolicy(db, s.brandId, now);
+    rule = await activeMemberRule(
+      db,
+      s.brandId,
+      "level",
+      dateInZone(now, policy.config.timezone),
     );
-    await updateMemberLevel(tx, s.brandId, m.id, day, "member-summary");
-    const current = await one(
-      tx,
-      "SELECT m.level,a.balance::text FROM members m JOIN growth_accounts a ON a.member_id=m.id WHERE m.id=$1",
-      [m.id],
-    );
-    const rule = await activeMemberRule(tx, s.brandId, "level", day);
-    const levels = rule.config.levels,
-      threshold = BigInt(levels[current.level - 1].threshold),
-      next = levels[current.level],
-      growth = BigInt(current.balance);
-    const today = await one(
-      tx,
-      "SELECT coalesce(sum(delta),0)::text AS n FROM growth_ledger WHERE member_id=$1 AND business_date=$2 AND kind<>'admin_adjustment'",
-      [m.id, day],
-    );
+  } catch (e) {
+    if (e instanceof DomainError && e.code === "member_rule_not_available")
+      return unavailable;
+    throw e;
+  }
+  const day = dateInZone(now, policy.config.timezone);
+  const current = (
+    await db.query(
+      `SELECT m.id,m.level,a.balance::text FROM member_user_links l
+     JOIN members m ON (m.brand_id,m.id)=(l.brand_id,l.member_id)
+     JOIN growth_accounts a ON (a.brand_id,a.member_id)=(m.brand_id,m.id)
+     WHERE l.brand_id=$1 AND l.bot_id=$2 AND l.user_id=$3`,
+      [s.brandId, s.botId, s.userId],
+    )
+  ).rows[0];
+  const nextAvailableAt = new Date(
+    wallInstant(calendarDay(day, 1), "00:00", policy.config.timezone),
+  ).toISOString();
+  // A new user can explicitly check in (the POST owns initialization); the GET cannot.
+  if (!current)
     return {
-      enabled: true,
-      available: true,
-      level: current.level,
-      levelName: levels[current.level - 1].name,
-      growth: current.balance,
-      nextThreshold: next ? String(next.threshold) : null,
-      progress: next
-        ? Math.max(
-            0,
-            Math.min(
-              100,
-              Number(
-                ((growth - threshold) * 100n) /
-                  BigInt(next.threshold - levels[current.level - 1].threshold),
-              ),
-            ),
-          )
-        : 100,
-      protected: growth < threshold,
-      todayGrowth: today.n,
-      dailyCap: 350,
-      levels: levels.map((l: any) => ({
-        key: l.key,
-        name: l.name,
-        threshold: l.threshold,
-      })),
-      benefitsAvailable: false,
+      ...unavailable,
+      businessTimezone: policy.config.timezone,
+      businessDate: day,
+      checkinReward: String(policy.config.checkin),
+      actualGrowthEarned: "0",
+      nextAvailableAt: now.toISOString(),
+      checkinStatus: "available",
+      canCheckin: true,
     };
-  });
+  const stats = await one(
+    db,
+    `SELECT
+    (SELECT coalesce(sum(delta),0)::text FROM growth_ledger WHERE brand_id=$1 AND member_id=$2 AND business_date=$3 AND kind<>'admin_adjustment') AS today,
+    EXISTS(SELECT 1 FROM growth_sources WHERE brand_id=$1 AND member_id=$2 AND source_type='daily_checkin' AND business_date=$3) AS checked,
+    (SELECT coalesce(sum(g.delta),0)::text FROM growth_ledger g JOIN growth_sources gs ON (gs.brand_id,gs.member_id,gs.id)=(g.brand_id,g.member_id,g.source_id)
+      WHERE g.brand_id=$1 AND g.member_id=$2 AND g.business_date=$3 AND gs.source_type='daily_checkin') AS earned`,
+    [s.brandId, current.id, day],
+  );
+  const levels = rule.config.levels,
+    threshold = BigInt(levels[current.level - 1].threshold),
+    next = levels[current.level],
+    growth = BigInt(current.balance),
+    cap = policy.config.cap;
+  const capped =
+    BigInt(stats.today) >= BigInt(cap) ||
+    (stats.checked && BigInt(stats.earned) < BigInt(policy.config.checkin));
+  return {
+    enabled: true,
+    available: true,
+    level: current.level,
+    levelName: levels[current.level - 1].name,
+    growth: current.balance,
+    nextThreshold: next ? String(next.threshold) : null,
+    progress: next
+      ? Math.max(
+          0,
+          Math.min(
+            100,
+            Number(
+              ((growth - threshold) * 100n) /
+                BigInt(next.threshold - levels[current.level - 1].threshold),
+            ),
+          ),
+        )
+      : 100,
+    protected: growth < threshold,
+    todayGrowth: stats.today,
+    dailyCap: cap,
+    levels: levels.map((l: any) => ({
+      key: l.key,
+      name: l.name,
+      threshold: l.threshold,
+    })),
+    benefitsAvailable: false,
+    todayCheckedIn: stats.checked,
+    actualGrowthEarned: stats.earned,
+    nextAvailableAt:
+      stats.checked || capped ? nextAvailableAt : now.toISOString(),
+    businessTimezone: policy.config.timezone,
+    businessDate: day,
+    checkinReward: String(policy.config.checkin),
+    checkinStatus: capped
+      ? "cap_reached"
+      : stats.checked
+        ? "checked_in"
+        : "available",
+    canCheckin: !stats.checked && !capped,
+  };
 }
 export async function runGrowthTasks(
   db: Database,

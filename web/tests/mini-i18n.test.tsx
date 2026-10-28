@@ -11,6 +11,8 @@ import {
   readPreference,
   supportedUiLocales,
   zh,
+  dictionaries,
+  contentLocale,
 } from "../src/mini/i18n";
 describe("Mini presentation locale", () => {
   it("device choice, stored user, Bot, project, Telegram, system precedence", () => {
@@ -28,11 +30,11 @@ describe("Mini presentation locale", () => {
     );
     expect(resolveLocale({})).toBe("en");
   });
-  it("all choices have safe text, complete English, explicit missing-key fallback", () => {
+  it("all five locales have explicit translations and safe missing-key fallback", () => {
     for (const locale of supportedUiLocales)
       for (const key of Object.keys(zh))
         expect(translate(locale, key)).not.toMatch(/undefined|^translation\./);
-    expect(translate("pt-BR", "home")).toBe("Home");
+    expect(translate("pt-BR", "home")).toBe("Início");
     expect(translate("pt-BR", "inviteShare")).toBe("Compartilhar com amigos");
     expect(translate("pt-BR", "p2PointsEarned")).toBe(
       "Points ganhos com convites",
@@ -45,8 +47,75 @@ describe("Mini presentation locale", () => {
       "Compartilhe seu link de convite",
     );
     expect(translate("en", "home")).toBe("Home");
-    expect(translate("zh-CN", "unknown.key")).toBe("Content is being prepared");
+    expect(translate("zh-CN", "unknown.key")).toBe("内容正在准备中");
+    for (const locale of supportedUiLocales)
+      expect(translate(locale, "unknown.key")).toBe(
+        dictionaries[locale].unavailable,
+      );
     expect(normalizeLocale("fil-PH")).toBe("fil");
+  });
+  it("every locale explicitly covers the complete key set with identical interpolation contracts", () => {
+    const keys = Object.keys(zh).sort();
+    for (const locale of supportedUiLocales) {
+      expect(Object.keys(dictionaries[locale]).sort()).toEqual(keys);
+      expect(contentLocale(locale)).toBe(locale);
+      for (const key of keys) {
+        const entry = dictionaries[locale][key as keyof typeof zh];
+        expect(entry.trim().length, `${locale}.${key}`).toBeGreaterThan(0);
+        const tokens = (value: string) =>
+          [...value.matchAll(/\{(\w+)\}/g)].map((match) => match[1]).sort();
+        expect(tokens(entry), `${locale}.${key}`).toEqual(
+          tokens(zh[key as keyof typeof zh]),
+        );
+      }
+    }
+  });
+  it("non-English locales do not silently borrow English sentences, buttons or error states", () => {
+    // Brand terms and mathematical notation intentionally remain unchanged.
+    const universal = new Set(["growth", "pointsUnit", "p2GrowthChange"]);
+    for (const locale of ["pt-BR", "es-MX", "fil"] as const) {
+      for (const key of Object.keys(zh) as (keyof typeof zh)[]) {
+        if (!universal.has(key)) {
+          expect(dictionaries[locale][key], `${locale}.${key}`).not.toBe(
+            dictionaries.en[key],
+          );
+        }
+      }
+    }
+    expect(translate("es-MX", "unauthorized")).toContain("sesión");
+    expect(translate("fil", "inventoryEmpty")).toContain("Walang");
+    expect(translate("pt-BR", "p0PointsGap", { points: "100" })).toBe(
+      "Faltam 100 Points",
+    );
+  });
+  it("keeps invite Points separate from check-in Growth in every language", () => {
+    for (const locale of supportedUiLocales) {
+      expect(translate(locale, "p2InviteNext")).toContain("Points");
+      expect(translate(locale, "p2InviteNext")).not.toContain("Growth");
+      expect(translate(locale, "p0CheckinGrowth")).toContain("Growth");
+      expect(translate(locale, "p0CheckinEarned", { growth: "0" })).toContain(
+        "0",
+      );
+      expect(
+        translate(locale, "p0CheckinEarned", { growth: "0" }),
+      ).not.toContain("5");
+    }
+  });
+  it("distinguishes permission denial from expired auth, connection failure and disabled features", () => {
+    expect(translate("zh-CN", "forbidden")).toBe("你没有执行此操作的权限。");
+    for (const locale of supportedUiLocales) {
+      const states = [
+        "forbidden",
+        "unauthorized",
+        "network",
+        "service_unavailable",
+        "p0MemberDisabled",
+        "p0Unavailable",
+      ];
+      expect(new Set(states.map((key) => translate(locale, key))).size).toBe(
+        states.length,
+      );
+    }
   });
   it("integer points preserve bigint precision; no invented currency", () => {
     expect(formatPoints("9007199254740993", "en")).toBe(

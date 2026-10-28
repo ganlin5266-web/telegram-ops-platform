@@ -526,6 +526,9 @@ describe(
         assert.deepEqual(await miniMemberSummary(db, f.s, now), {
           enabled: false,
           available: false,
+          todayCheckedIn: false, actualGrowthEarned: null, nextAvailableAt: null,
+          businessTimezone: null, businessDate: null, checkinReward: null,
+          checkinStatus: "unavailable", canCheckin: false,
         });
         await assert.rejects(
           checkinGrowth(db, f.s, "test", now),

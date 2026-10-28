@@ -21,17 +21,13 @@ import PlatformAccounts from "./PlatformAccounts";
 import RedemptionCentre from "./RedemptionCentre";
 import {
   CheckinPanel,
-  DailyDone,
   BackendPrimary,
-  GrowthWays,
   InviteJourney,
-  checkinState,
   isKnownPrimary,
-  nearLevelUp,
 } from "./retention";
 import "./style.css";
-const tabs = ["home", "membership", "activities", "games", "me"] as const;
-type Tab = (typeof tabs)[number] | "rewards" | "invite";
+const tabs = ["home", "rewards", "invite", "me"] as const;
+type Tab = (typeof tabs)[number] | "membership";
 type Kind = "point-ledger" | "referrals" | "redemptions";
 export function MiniApp({
   client: injected,
@@ -39,6 +35,7 @@ export function MiniApp({
   const client = useRef(injected ?? createClient()).current;
   const [tab, setTab] = useState<Tab>("home"),
     [home, setHome] = useState<Home>(),
+    [platformId, setPlatformId] = useState<string>(),
     [busy, setBusy] = useState(false),
     [error, setError] = useState<MiniError>(),
     [out, setOut] = useState(false),
@@ -46,9 +43,8 @@ export function MiniApp({
     [page, setPage] = useState<Page>(),
     [recoverRedemptionId, setRecoverRedemptionId] = useState<string>(),
     [panel, setPanel] = useState<
-      "games" | "language" | "help" | "platformAccount" | null
+      "language" | "help" | "platformAccount" | null
     >(null),
-    [platformVerified, setPlatformVerified] = useState<boolean>(),
     [device, setDevice] = useState<Locale | undefined>(() =>
       readPreference(miniBrand.preferenceKey),
     );
@@ -88,7 +84,7 @@ export function MiniApp({
     run(async () => {
       if (!client.connected)
         await client.connect(window.Telegram?.WebApp?.initData ?? "");
-      setHome(await client.home());
+      setHome(await client.home(platformId));
     });
   useEffect(() => {
     window.Telegram?.WebApp?.ready?.();
@@ -103,6 +99,7 @@ export function MiniApp({
       const next = await client.page(
         k,
         more ? (page?.nextCursor ?? undefined) : undefined,
+        platformId,
       );
       if (v === version.current)
         setPage(
@@ -118,17 +115,8 @@ export function MiniApp({
     setPage(undefined);
     setError(undefined);
     setPanel(null);
-    if (next === "membership" && platformVerified === undefined)
-      void client
-        .platforms?.()
-        .then((r) =>
-          setPlatformVerified(
-            r.items.some((p) => p.identity?.status === "verified"),
-          ),
-        )
-        .catch(() => {});
     if (next === "rewards" || next === "invite") {
-      const history = k ?? (next === "invite" ? "referrals" : "point-ledger");
+      const history = k ?? (next === "invite" ? "referrals" : "redemptions");
       setKind(history);
       void records(history);
     }
@@ -243,15 +231,36 @@ export function MiniApp({
     </section>
   );
   const balance = formatPoints(home?.points.balance, locale);
-  const memberOn = !!(home?.member?.enabled && home.member.available);
   const refreshHome = async () => {
-    const h = await client.home();
+    const h = await client.home(platformId);
     setHome(h);
     return h;
   };
-  const near = memberOn && nearLevelUp(home?.member);
-  const goEarn = () => select("membership");
-  const go = (to: string) => (to === "bind" ? openBind() : select(to as Tab));
+  const go = (to: string, orderId?: string) => {
+    if (to === "bind") openBind();
+    else if (to === "checkin")
+      document
+        .getElementById("daily-checkin")
+        ?.scrollIntoView({ behavior: "smooth" });
+    else if (to === "records") select("rewards", "redemptions");
+    else {
+      if (orderId) setRecoverRedemptionId(orderId);
+      select(to as Tab);
+    }
+  };
+  const choosePlatform = (id: string) => {
+    version.current++;
+    setPage(undefined);
+    setRecoverRedemptionId(undefined);
+    void run(async () => {
+      const next = await client.home(id);
+      setHome(next);
+      setPlatformId(id);
+      if (tab === "invite") {
+        setPage(await client.page("referrals", undefined, id));
+      }
+    });
+  };
   const openBind = () => {
     select("me");
     setPanel("platformAccount");
@@ -310,104 +319,150 @@ export function MiniApp({
                 : t(tab)}
             </h1>
           </div>
+          {["home", "invite", "rewards"].includes(tab) &&
+            !!home.platforms?.length && (
+              <label className="platform-picker">
+                {t("p0Platform")}
+                <select
+                  disabled={busy}
+                  value={home.currentPlatform?.id ?? ""}
+                  onChange={(e) => choosePlatform(e.target.value)}
+                >
+                  {home.platforms.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.displayName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           {tab === "home" && (
             <>
-              <div data-testid="today-focus">
-                <MemberCard
-                  member={home.member}
-                  locale={locale}
-                  onEarn={near ? goEarn : undefined}
-                />
-                <button
-                  className="text-button card-link"
-                  onClick={() => select("membership")}
-                >
-                  {t("membership")} <span aria-hidden="true">→</span>
-                </button>
-              </div>
-              <h2 className="section-title">{t("todayActions")}</h2>
-              {isKnownPrimary(home.primaryAction) ? (
-                <BackendPrimary t={t} action={home.primaryAction} go={go} />
-              ) : !memberOn ? (
-                <div className="primary-action">
-                  <div>
-                    <strong>{t("actionBind")}</strong>
-                    <small>{t("actionBindBody")}</small>
-                  </div>
-                  <button onClick={openBind}>{t("bindCta")}</button>
+              <section
+                className="hero points-card"
+                aria-label={t("points")}
+                data-testid="today-focus"
+              >
+                <span className="pill">{t("points")}</span>
+                <div className="balance">
+                  {balance}
+                  <small> Points</small>
                 </div>
-              ) : (
+                <p>{t("pointsBody")}</p>
+                {home.points.expiringSoon &&
+                  home.points.expiringSoon !== "0" && (
+                    <small>
+                      {t("pointsExpiring", {
+                        amount: formatPoints(home.points.expiringSoon, locale),
+                      })}
+                    </small>
+                  )}
+                <div className="next-reward">
+                  <small>{t("p0NextReward")}</small>
+                  {home.recommendedRedemption ? (
+                    <>
+                      <strong>
+                        {home.recommendedRedemption.face_value}{" "}
+                        {home.recommendedRedemption.face_currency}
+                      </strong>
+                      <span>
+                        {formatPoints(
+                          home.recommendedRedemption.points_cost,
+                          locale,
+                        )}{" "}
+                        Points
+                      </span>
+                      {home.recommendedRedemption.pointsGap != null && (
+                        <p>
+                          {t("p0PointsGap", {
+                            points: formatPoints(
+                              home.recommendedRedemption.pointsGap,
+                              locale,
+                            ),
+                          })}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p>{t("p0NoReward")}</p>
+                  )}
+                </div>
+              </section>
+              {isKnownPrimary(home.primaryAction) &&
+                home.primaryAction.kind !== "checkin" && (
+                  <BackendPrimary t={t} action={home.primaryAction} go={go} />
+                )}
+              <div id="daily-checkin">
                 <CheckinPanel
-                  doneView={<DailyDone t={t} go={go} />}
                   t={t}
+                  locale={locale}
                   member={home.member}
                   checkin={client.memberCheckin}
                   refresh={refreshHome}
                   onInvite={() => select("invite")}
-                  onBenefits={() => select("membership")}
+                  primary={home.primaryAction?.kind === "checkin"}
                 />
-              )}
-              <section className="points-strip" aria-label={t("points")}>
-                <div>
-                  <small>{t("points")}</small>
-                  <strong>
-                    {balance} <span>{t("pointsUnit")}</span>
-                  </strong>
-                  {home.points.expiringSoon &&
-                    home.points.expiringSoon !== "0" && (
-                      <em>
-                        {t("pointsExpiring", {
-                          amount: formatPoints(
-                            home.points.expiringSoon,
-                            locale,
-                          ),
-                        })}
-                      </em>
-                    )}
-                </div>
-                <button onClick={() => select("rewards")}>
-                  {t("rewardCentre")}
+              </div>
+              <section className="card home-invitation">
+                <h2>{t("actionInvite")}</h2>
+                {home.referral?.rewardedToday != null && (
+                  <p>
+                    {t("p0RewardedToday")}: {home.referral.rewardedToday} /{" "}
+                    {home.referral.dailyCap ??
+                      home.referral.dailyRewardLimit ??
+                      "—"}
+                  </p>
+                )}
+                {home.referral?.pendingCount != null && (
+                  <small>
+                    {t("p0PendingInvites")}: {home.referral.pendingCount}
+                  </small>
+                )}
+                <button
+                  className="text-button"
+                  onClick={() => select("invite")}
+                >
+                  {t("inviteHistory")} →
                 </button>
               </section>
-              <div className="secondary-actions">
-                <button onClick={() => select("invite")}>
-                  <span className="tile-icon">
-                    <Icon name="users" />
-                  </span>
-                  <span>
-                    <strong>{t("actionInvite")}</strong>
-                    <small>{t("inviteActionBody")}</small>
-                  </span>
-                  <span className="go">{t("inviteCta")}</span>
-                </button>
-                {memberOn ? (
-                  <button onClick={openBind}>
-                    <span className="tile-icon">
-                      <Icon name="link" />
-                    </span>
-                    <span>
-                      <strong>{t("actionBind")}</strong>
-                      <small>{t("actionBindBody")}</small>
-                    </span>
-                    <span className="go">
-                      <Icon name="arrow" />
-                    </span>
-                  </button>
+              <section className="card">
+                <h2>{t("myRedeem")}</h2>
+                {home.recentOrders?.length ? (
+                  home.recentOrders.map((order) => (
+                    <article key={order.id} className="record">
+                      <small>{formatDate(order.created_at, locale)}</small>
+                      <span>
+                        {formatPoints(order.points_cost, locale)} Points
+                      </span>
+                      <button
+                        className="text-button"
+                        onClick={() =>
+                          go(
+                            "rewards",
+                            [
+                              "code_assigned",
+                              "code_claimed",
+                              "review_required",
+                            ].includes(order.status ?? "")
+                              ? order.id
+                              : undefined,
+                          )
+                        }
+                      >
+                        {t("p0ViewRecords")}
+                      </button>
+                    </article>
+                  ))
                 ) : (
-                  <button onClick={() => select("membership")}>
-                    <span className="tile-icon">
-                      <Icon name="growth" />
-                    </span>
-                    <span>
-                      <strong>{t("growthWays")}</strong>
-                      <small>{t("growthWaysBody")}</small>
-                    </span>
-                    <span className="go">
-                      <Icon name="arrow" />
-                    </span>
-                  </button>
+                  <p>{t("redeemEmpty")}</p>
                 )}
-              </div>
+              </section>
+              <button
+                className="text-button"
+                onClick={() => select("membership")}
+              >
+                {t("membership")} · Growth →
+              </button>
               <p className="aside-note">{t("growthDifference")}</p>
             </>
           )}
@@ -418,78 +473,7 @@ export function MiniApp({
                 locale={locale}
                 history={client.memberHistory}
               />
-              {memberOn && (
-                <CheckinPanel
-                  t={t}
-                  member={home.member}
-                  checkin={client.memberCheckin}
-                  refresh={refreshHome}
-                  onInvite={() => select("invite")}
-                  onBenefits={() => select("membership")}
-                />
-              )}
-              <h2 className="section-title">{t("growthWays")}</h2>
-              <GrowthWays
-                t={t}
-                member={home.member}
-                memberOn={memberOn}
-                platformVerified={platformVerified}
-                onCheckin={() =>
-                  window.scrollTo?.({ top: 0, behavior: "smooth" })
-                }
-                onInvite={() => select("invite")}
-                onBind={openBind}
-              />
-              <section className="card compact-list">
-                <div className="placeholder-row">
-                  <span>{t("currentBenefits")}</span>
-                  <small>{t("soon")}</small>
-                </div>
-                <div className="placeholder-row">
-                  <span>
-                    {memberOn && home.member?.nextThreshold
-                      ? t("levelBenefits", {
-                          level: String((home.member.level ?? 0) + 1),
-                        })
-                      : t("nextBenefits")}
-                  </span>
-                  <small>{t("soon")}</small>
-                </div>
-              </section>
               <p className="aside-note">{t("growthDifference")}</p>
-            </>
-          )}
-          {tab === "games" && (
-            <>
-              <p className="page-intro">{t("gameBody")}</p>
-              <div className="game-grid">
-                {(["wheel", "chest", "scratch", "cards"] as const).map(
-                  (k, i) => (
-                    <section className="card game-tile" key={k}>
-                      <span className="game-glyph" aria-hidden="true">
-                        {["◉", "◇", "▧", "♧"][i]}
-                      </span>
-                      <h2>{t(k)}</h2>
-                      <button disabled>{t("soon")}</button>
-                    </section>
-                  ),
-                )}
-              </div>
-            </>
-          )}
-          {tab === "activities" && (
-            <>
-              <p className="page-intro">{t("activityIntro")}</p>
-              <button
-                className="activity-invite"
-                onClick={() => select("invite")}
-              >
-                {t("friends")} <span>→</span>
-              </button>
-              <section className="card launching">
-                <h2>{t("activitiesLaunching")}</h2>
-                <p className="muted">{t("activitiesLaunchingBody")}</p>
-              </section>
             </>
           )}
           {tab === "rewards" && (
@@ -526,12 +510,6 @@ export function MiniApp({
                   aria-pressed={kind === "redemptions"}
                   onClick={() => historySelect("redemptions")}
                 >
-                  {t("redeemCentre")}
-                </button>
-                <button
-                  aria-pressed={kind === "redemptions"}
-                  onClick={() => historySelect("redemptions")}
-                >
                   {t("myRedeem")}
                 </button>
               </div>
@@ -542,15 +520,10 @@ export function MiniApp({
                   t={t}
                   onChanged={refreshHome}
                   recoverId={recoverRedemptionId}
+                  platformId={home.currentPlatform?.id}
+                  onOrders={() => historySelect("redemptions")}
                 />
               )}
-              <details className="card">
-                <summary>{t("earnPoints")}</summary>
-                <p>{t("earnPointsBody")}</p>
-                <button onClick={() => select("activities")}>
-                  {t("activities")}
-                </button>
-              </details>
               {history}
             </>
           )}
@@ -562,6 +535,7 @@ export function MiniApp({
               page={kind === "referrals" ? page : undefined}
               busy={busy}
               more={() => void records("referrals", true)}
+              onCheckin={() => select("home")}
             />
           )}
           {tab === "me" && (
@@ -588,12 +562,9 @@ export function MiniApp({
                   {t("myRedeem")}
                   <span aria-hidden="true">→</span>
                 </button>
-                {(["entitlements"] as const).map((k) => (
-                  <div className="placeholder-row" key={k}>
-                    <span>{t(k)}</span>
-                    <small>{t("soon")}</small>
-                  </div>
-                ))}
+                <button onClick={() => select("membership")}>
+                  {t("membership")} · Growth<span aria-hidden="true">→</span>
+                </button>
                 <button onClick={() => setPanel("platformAccount")}>
                   {t("platformAccount")}
                   <span aria-hidden="true">→</span>
@@ -631,28 +602,20 @@ export function MiniApp({
               ref={panelRef}
               tabIndex={-1}
               role="region"
-              aria-label={t(panel === "games" ? "gameTitle" : panel)}
+              aria-label={t(panel)}
             >
               <div className="card-top">
-                <h2>{t(panel === "games" ? "gameTitle" : panel)}</h2>
+                <h2>{t(panel)}</h2>
                 <button className="text-button" onClick={() => setPanel(null)}>
                   {t("close")}
                 </button>
               </div>
               {panel === "platformAccount" ? (
-                <PlatformAccounts client={client} locale={locale} />
-              ) : panel === "games" ? (
-                <>
-                  <p className="muted">{t("gameBody")}</p>
-                  {(["wheel", "chest", "scratch", "cards"] as const).map(
-                    (k) => (
-                      <div className="placeholder-row" key={k}>
-                        <span>{t(k)}</span>
-                        <small>{t("soon")}</small>
-                      </div>
-                    ),
-                  )}
-                </>
+                <PlatformAccounts
+                  client={client}
+                  locale={locale}
+                  onChanged={refreshHome}
+                />
               ) : panel === "language" ? (
                 <>
                   <div className="language-options">
@@ -729,15 +692,14 @@ export function MiniApp({
             <button
               key={item}
               aria-current={
-                item === tab ||
-                (item === "me" && (tab === "rewards" || tab === "invite"))
+                item === tab || (item === "me" && tab === "membership")
                   ? "page"
                   : undefined
               }
               disabled={busy}
               onClick={() => select(item)}
             >
-              <Icon name={["home", "badge", "spark", "game", "user"][i]} />
+              <Icon name={["home", "gift", "users", "user"][i]} />
               {t(item)}
             </button>
           ))}

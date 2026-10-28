@@ -1,0 +1,154 @@
+{
+  "stage": "p0_growth_experience_local_acceptance",
+  "date": "2026-10-29",
+  "base_sha": "46958f2bc1956d41dad338b8bfe3f1e1f79dd85c",
+  "branch": "codex/p0-growth-experience",
+  "environment": {
+    "node": "26.5.0",
+    "postgres": "17.11",
+    "postgres_session_timezone": "UTC",
+    "database_scope": "isolated localhost only"
+  },
+  "tests": {
+    "pglite_full": {
+      "tests": 506,
+      "pass": 476,
+      "fail": 0,
+      "skipped": 30
+    },
+    "pg17_full": {
+      "tests": 531,
+      "pass": 531,
+      "fail": 0,
+      "skipped": 0
+    },
+    "p0_pglite": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0
+    },
+    "p0_pg17": {
+      "tests": 11,
+      "pass": 11,
+      "fail": 0,
+      "skipped": 0
+    },
+    "frontend": {
+      "files": 22,
+      "pass": 244,
+      "fail": 0,
+      "skipped": 0
+    },
+    "browser": {
+      "pass": 30,
+      "fail": 0,
+      "skipped": 0
+    },
+    "five_locale_browser_targeted": {
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "overlaps_full_browser": true
+    },
+    "proxy": {
+      "tests": 45,
+      "pass": 45,
+      "fail": 0,
+      "skipped": 0
+    },
+    "migration_replay": {
+      "migrations": 16,
+      "runs": 2,
+      "pass": true
+    },
+    "backend_build": "PASS",
+    "frontend_typescript_build": "PASS",
+    "bundle_scan": {
+      "files": 11,
+      "findings": 0
+    },
+    "secret_scan": {
+      "files": 261,
+      "findings": 0
+    }
+  },
+  "resolved_test_environment_issues": [
+    {
+      "issue": "PG17 local database timezone Asia/Yerevan versus UTC fixture windows",
+      "initial_pass": 509,
+      "initial_fail": 21,
+      "resolution": "Use UTC test connection; no application date logic or assertions changed"
+    },
+    {
+      "issue": "Sandbox denied local Proxy listening / tsx IPC",
+      "resolution": "Authorized isolated local execution; no Staging connection"
+    }
+  ],
+  "evidence_boundaries": [
+    "PGlite skips PG-only cases; PG17 executes concurrency using independent connections.",
+    "Mini browser tests use explicit synthetic API/auth fixtures, not real Telegram acceptance.",
+    "Admin browser tests use isolated local API/PostgreSQL.",
+    "Read-only recommendations are advisory; write APIs still revalidate atomically.",
+    "No Staging deployment or verification was performed in this task."
+  ],
+  "protection": {
+    "migration_changes": false,
+    "runtime_grants_changes": false,
+    "environment_changes": false,
+    "staging_writes": 0,
+    "deployment": false,
+    "main_changed": false,
+    "write_primitives_changed": false,
+    "render_auto_deploy": "API and Frontend disabled; both bound to main",
+    "github_push": "independent branch only"
+  },
+  "changed_files": [
+    "docs/p0-implementation-handover.md",
+    "docs/p0-mini-api.md",
+    "docs/p0-test-evidence.json",
+    "src/member-growth.ts",
+    "src/mini-experience.ts",
+    "src/mini-queries.ts",
+    "src/redemption-flow-routes.ts",
+    "src/redemption-flow.ts",
+    "src/referral-rewards.ts",
+    "tests/member-growth.test.ts",
+    "tests/mini-v1.test.ts",
+    "tests/p0-mini-experience.test.ts",
+    "web/e2e/mini-v1.spec.ts",
+    "web/e2e/p0-experience.spec.ts",
+    "web/src/mini/MemberCard.tsx",
+    "web/src/mini/PlatformAccounts.tsx",
+    "web/src/mini/RedemptionCentre.tsx",
+    "web/src/mini/client.ts",
+    "web/src/mini/i18n.ts",
+    "web/src/mini/locales/es-MX.ts",
+    "web/src/mini/locales/fil.ts",
+    "web/src/mini/locales/pt-BR.ts",
+    "web/src/mini/main.tsx",
+    "web/src/mini/retention.tsx",
+    "web/src/mini/style.css",
+    "web/tests/member-growth.test.tsx",
+    "web/tests/mini-i18n.test.tsx",
+    "web/tests/mini-product.test.tsx",
+    "web/tests/mini-redemption.test.tsx",
+    "web/tests/mini-retention.test.tsx",
+    "web/tests/mini-v1.test.tsx"
+  ],
+  "log_sha256": {
+    "full-pglite-final.log": "d3dfcbd135922e8073d83d21a935fae170d07dfcbe7dd216655123df11e1969d",
+    "full-pg17-utc.log": "fbe2a520950eb257f2495063ba7a9af583aae7123e53fb0bc1b3d4e244557c45",
+    "backend-targeted-pglite.log": "82672340b10d331f39d141443ceee4c07079c52b704ade72c0b1f186f03be3a5",
+    "backend-targeted-pg17.log": "7507762dc61df42de541e5dc4e013e4923479daa1bc0816a57fde4311cf7e600",
+    "full-frontend-final.log": "2c2639863417ec94b7dc7e9593b0874a14204887bd5ec149d425aefe5661239a",
+    "full-e2e-final.log": "48a2d3b25fb54d2c5469e66e5409174e1a34c5d08dbaa2e1b299afaf499cd042",
+    "p0-e2e-five-locales.log": "a3504118613458c67168a683ae642a3be9dd34800a06d84ad5cc13a25ca74d84",
+    "proxy.log": "ef1b1fb0c11d1fd7e046e7b5465c9984c01b3f6512941e975732c6fcb61f2cae",
+    "backend-build.log": "1b37ce24229450067995812ab038b640c9957c57f8144a09d81bd746ba1be896",
+    "frontend-build-final.log": "ac2df2bd042eec24b1d675fa14ca1b89eaf2fcdf8770b8fa9a6b1f7ecd181eaf",
+    "migration-replay.log": "8376fb6f16677d0a6403aa201fff1dfcc0e7aa4a16ef1f4930860d1b6036659d",
+    "push-safety.json": "e5e01f5c3c98e4efa4f8a0454becea326e15bc4f213ae0028022bd17ddc8e2fe",
+    "secret-scan-final.log": "1466c57015c02c7b283a33d0da18d39e0f202c89fdfc52ac264f7a62d1da0ef6"
+  }
+}

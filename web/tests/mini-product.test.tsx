@@ -8,128 +8,123 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-const fixture = vi.hoisted(() => ({
+import { MiniApp } from "../src/mini/main";
+import { translate } from "../src/mini/i18n";
+const home = {
   profile: {
     displayName: "Ada",
-    projectName: "Staging Test Brand",
-    botName: "P1 Test Bot",
+    projectName: "Private Brand",
+    botName: "Private Bot",
     uiLanguage: "zh-CN",
-    preferredLanguage: null as string | null,
-    botLanguage: "zh-CN",
+    preferredLanguage: "zh-CN",
   },
-  points: { accountExists: false, balance: null as string | null },
+  points: { accountExists: false, balance: null },
   invitedCount: "0",
   redemptionCount: "0",
   activities: { participationEnabled: false },
-}));
-vi.mock("../src/mini/client", async (original) => ({
-  ...(await original<typeof import("../src/mini/client")>()),
-  createClient: () => ({
+  primaryAction: { kind: "bind_uid" },
+};
+const client = () =>
+  ({
     connected: true,
-    home: async () => fixture,
+    home: async () => home,
     page: async () => ({ items: [], nextCursor: null }),
     redemptionTiers: async () => ({ items: [] }),
     forget: () => {},
-    logout: async () => {},
-  }),
-}));
-import { MiniApp } from "../src/mini/main";
-beforeEach(() => {
-  fixture.profile.preferredLanguage = null;
-  fixture.points = { accountExists: false, balance: null };
-});
-afterEach(cleanup);
-const open = async () => {
-  render(<MiniApp />);
-  await screen.findByRole("heading", { name: "你好，Ada" });
-  return userEvent.setup();
-};
-const nav = () => within(screen.getByRole("navigation"));
-describe("Mini product presentation", () => {
-  it("empty/new member sees a clear next action, never a giant missing-account card", async () => {
-    await open();
-    expect(screen.getByTestId("today-focus").textContent).toContain(
-      "会员成长尚未启用",
-    );
-    expect(screen.queryByText("暂无积分账户")).toBeNull();
-    expect(
-      within(screen.getByTestId("today-focus")).getByRole("button", {
-        name: "会员",
-      }),
-    ).toBeTruthy();
-    expect(screen.getByText("STAGING")).toBeTruthy();
-  });
-  it("activity templates remain disabled with no invented amount, rules or progress", async () => {
-    const u = await open();
-    await u.click(nav().getByRole("button", { name: "活动", exact: true }));
-    expect(screen.getByText("活动即将上线")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "敬请期待" })).toBeNull();
-    expect(screen.getByRole("button", { name: /邀请好友/ })).toBeTruthy();
-    expect(screen.queryByText("查看规则")).toBeNull();
-  });
-  it("rewards separate points, ledger and real redemption history", async () => {
-    const u = await open();
-    await u.click(
-      screen.getByRole("button", { name: "奖励中心", exact: true }),
-    );
-    await screen.findByText("还没有积分记录");
-    expect(
-      (screen.getByRole("button", { name: /兑换中心/ }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(false);
-    await u.click(
-      screen.getByRole("button", { name: "我的兑换", exact: true }),
-    );
-    await screen.findByText("还没有兑换记录");
-  });
-  it("invitations show the future journey without a fake sharing link", async () => {
-    const u = await open();
-    await u.click(screen.getByRole("button", { name: /邀请好友/ }));
-    await screen.findByText("还没有邀请记录");
-    expect(screen.getByText("分享专属入口")).toBeTruthy();
-    expect(screen.queryByText("复制邀请链接")).toBeNull();
-    expect(screen.getByText("规则尚未发布")).toBeTruthy();
-  });
-  it("game placeholder cannot grant chances; personal page hides technical names and IDs", async () => {
-    const u = await open();
-    await u.click(nav().getByRole("button", { name: "小游戏", exact: true }));
-    expect(screen.getByRole("heading", { name: "小游戏" })).toBeTruthy();
-    await u.click(nav().getByRole("button", { name: "我的", exact: true }));
-    expect(screen.getByText("平台账号")).toBeTruthy();
-    expect(screen.getByText("我的权益")).toBeTruthy();
-    expect(screen.queryByText("P1 Test Bot")).toBeNull();
-    expect(screen.queryByText("Staging Test Brand")).toBeNull();
-  });
-  it("real device language choice and explicit English fallback, logout retained", async () => {
-    const u = await open();
-    await u.click(nav().getByRole("button", { name: "我的", exact: true }));
-    await u.click(screen.getByRole("button", { name: /语言 简体中文/ }));
-    await u.click(screen.getByRole("button", { name: "English", exact: true }));
-    await waitFor(() => expect(document.documentElement.lang).toBe("en"));
-    expect(localStorage.getItem("mini-ui-language:telegram-mini-ui")).toBe(
-      "en",
-    );
-    await u.click(
-      screen.getByRole("button", { name: "Filipino", exact: true }),
-    );
-    expect(
-      screen.getByText(
-        "Full translation is being prepared. English is shown for now.",
-      ),
-    ).toBeTruthy();
-    await u.click(
-      screen.getByRole("button", { name: "Sign out", exact: true }),
-    );
-    await screen.findByRole("heading", { name: "Signed out safely" });
-  });
-});
-
+    logout: vi.fn(async () => {}),
+    memberHistory: async () => ({ items: [] }),
+  }) as any;
 beforeEach(() => {
   const store = new Map<string, string>();
   vi.stubGlobal("localStorage", {
     getItem: (k: string) => store.get(k) ?? null,
     setItem: (k: string, v: string) => store.set(k, v),
-    clear: () => store.clear(),
   });
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+async function open(c = client()) {
+  render(<MiniApp client={c} />);
+  await screen.findByRole("heading", { name: "你好，Ada" });
+  return userEvent.setup();
+}
+const nav = () => within(screen.getByRole("navigation"));
+describe("P0 product layout", () => {
+  it("four destinations, no unfinished activities/games/benefits", async () => {
+    await open();
+    expect(
+      nav()
+        .getAllByRole("button")
+        .map((x) => x.textContent),
+    ).toEqual(["首页", "奖励", "邀请", "我的"]);
+    expect(screen.queryByText("小游戏")).toBeNull();
+    expect(screen.queryByText("活动即将上线")).toBeNull();
+    expect(screen.queryByText("我的权益")).toBeNull();
+  });
+  it("new user has one backend-selected bind action, no invented balance", async () => {
+    await open();
+    expect(screen.getByTestId("today-focus").textContent).not.toContain(
+      "0 Points",
+    );
+    expect(
+      within(screen.getByTestId("primary-action")).getByRole("button", {
+        name: "去绑定",
+      }),
+    ).toBeTruthy();
+    expect(screen.getByTestId("today-focus").textContent).not.toContain("LV1");
+  });
+  it("rewards default to catalogue/orders and ledger remains accessible", async () => {
+    const u = await open();
+    await u.click(nav().getByRole("button", { name: "奖励", exact: true }));
+    await screen.findByText("当前没有可兑换档位。");
+    expect(screen.getByRole("heading", { name: "兑换中心" })).toBeTruthy();
+    await u.click(
+      screen.getByRole("button", { name: "积分明细", exact: true }),
+    );
+    await screen.findByText("还没有积分记录");
+  });
+  it("invite absent summary has no fake link or reward", async () => {
+    const u = await open();
+    await u.click(nav().getByRole("button", { name: "邀请", exact: true }));
+    await screen.findByText("还没有邀请记录");
+    expect(screen.queryByRole("button", { name: "复制邀请链接" })).toBeNull();
+    expect(screen.getByTestId("invite-hero").textContent).not.toContain("50");
+  });
+  it("member details moved to me and sensitive scope names stay hidden", async () => {
+    const u = await open();
+    await u.click(nav().getByRole("button", { name: "我的", exact: true }));
+    expect(screen.getByRole("button", { name: /会员 · Growth/ })).toBeTruthy();
+    expect(screen.queryByText("Private Brand")).toBeNull();
+    expect(screen.queryByText("Private Bot")).toBeNull();
+    await u.click(screen.getByRole("button", { name: /会员 · Growth/ }));
+    expect(await screen.findByText("会员成长尚未启用")).toBeTruthy();
+  });
+  it("device language selection has genuine Filipino, secure logout retained", async () => {
+    const c = client(),
+      u = await open(c);
+    await u.click(nav().getByRole("button", { name: "我的", exact: true }));
+    await u.click(screen.getByRole("button", { name: /语言 简体中文/ }));
+    await u.click(
+      screen.getByRole("button", { name: "Filipino", exact: true }),
+    );
+    await waitFor(() => expect(document.documentElement.lang).toBe("fil"));
+    expect(localStorage.getItem("mini-ui-language:telegram-mini-ui")).toBe(
+      "fil",
+    );
+    expect(screen.queryByText(/Full translation is being prepared/)).toBeNull();
+    await u.click(
+      screen.getByRole("button", {
+        name: translate("fil", "logout"),
+        exact: true,
+      }),
+    );
+    expect(c.logout).toHaveBeenCalledTimes(1);
+    expect(
+      await screen.findByRole("heading", {
+        name: translate("fil", "loggedOut"),
+      }),
+    ).toBeTruthy();
+  });
+});

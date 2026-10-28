@@ -7,6 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { MemberCard, CheckinAction } from "../src/mini/MemberCard";
+import { translate } from "../src/mini/i18n";
 import { MemberAdmin } from "../src/product/MemberAdmin";
 import { MemberMetrics } from "../src/product/MemberMetrics";
 vi.mock("../src/api", () => ({
@@ -54,11 +55,11 @@ describe("Member Batch A UI", () => {
     );
     expect(screen.getByText("LV3 · Gold")).toBeTruthy();
     expect(screen.getByText("你的会员等级已保留")).toBeTruthy();
-    fireEvent.click(screen.getByText("成长记录"));
+    fireEvent.click(screen.getByText(translate("zh-CN", "p0GrowthHistory")));
     await screen.findByText(/-60 Growth/);
     expect(history).toHaveBeenCalledOnce();
   });
-  it("max level explicit English fallback without fake next threshold", () => {
+  it("max level localized Portuguese without fake next threshold", () => {
     render(
       <MemberCard
         locale="pt-BR"
@@ -75,11 +76,7 @@ describe("Member Batch A UI", () => {
         }}
       />,
     );
-    expect(
-      screen.getByText(
-        "Highest level reached. Growth continues to accumulate.",
-      ),
-    ).toBeTruthy();
+    expect(screen.getByText(translate("pt-BR", "p0HighestLevel"))).toBeTruthy();
   });
   it("checkin refreshes summary and handles failure safely", async () => {
     const checkin = vi.fn().mockRejectedValue(new Error("hidden")),
@@ -93,7 +90,7 @@ describe("Member Batch A UI", () => {
         body="b"
       />,
     );
-    fireEvent.click(screen.getByText("Daily check-in"));
+    fireEvent.click(screen.getByText(translate("en", "p0CheckinGrowth")));
     await screen.findByRole("alert");
     expect(refresh).not.toHaveBeenCalled();
     expect(screen.queryByText("hidden")).toBeNull();

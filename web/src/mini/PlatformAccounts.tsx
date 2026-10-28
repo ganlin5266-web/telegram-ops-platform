@@ -9,9 +9,11 @@ import { translate, formatDate, type Locale, type Key } from "./i18n";
 export default function PlatformAccounts({
   client,
   locale,
+  onChanged,
 }: {
   client: MiniClient;
   locale: Locale;
+  onChanged?: () => Promise<unknown>;
 }) {
   const [dataStatus, setDataStatus] = useState<
     { platformId: string; latestDate: string | null; status: string }[]
@@ -66,6 +68,7 @@ export default function PlatformAccounts({
       setUid("");
       setSelected("");
       await refresh();
+      await onChanged?.();
     });
   }
   const statusKey = (s?: string): Key =>
@@ -77,7 +80,7 @@ export default function PlatformAccounts({
         conflict: "uidConflict",
         revoked: "uidRevoked",
       }) as Record<string, Key>
-    )[s ?? ""] ?? "uidUnbound";
+    )[s ?? ""] ?? (s ? "p0StatusUnknown" : "uidUnbound");
   return (
     <section className="card platform-accounts">
       <div className="card-top">
@@ -91,7 +94,8 @@ export default function PlatformAccounts({
         </button>
       </div>
       <p className="muted">{t("uidIntro")}</p>
-      {!busy && items.length === 0 && <p>{t("uidNoPlatforms")}</p>}
+      <p className="muted">{t("p0UidNoGuaranteedReward")}</p>
+      {!busy && !error && items.length === 0 && <p>{t("uidNoPlatforms")}</p>}
       {items.map((p) => (
         <article className="platform-account" key={p.id}>
           <h3>{p.display_name}</h3>
@@ -113,7 +117,8 @@ export default function PlatformAccounts({
           {p.identity?.status === "rejected" && <p>{t("uidRejectedHelp")}</p>}
           {p.status !== "active" || p.verification_method !== "manual_admin" ? (
             <p>{t("uidUnavailable")}</p>
-          ) : !["pending", "verified"].includes(p.identity?.status ?? "") ? (
+          ) : !p.identity ||
+            ["rejected", "conflict", "revoked"].includes(p.identity.status) ? (
             <>
               {selected === p.id ? (
                 <form

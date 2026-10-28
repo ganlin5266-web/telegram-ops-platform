@@ -198,7 +198,7 @@ test('new Bot home remains available with global Growth/Lots enabled but no loca
  try {
   for(let i=0;i<2;i++) {
    const response=await f.get(token,'home');assert.equal(response.statusCode,200,response.body);
-   assert.deepEqual(response.json().member,{enabled:true,available:false});
+   assert.deepEqual(response.json().member,{enabled:true,available:false,todayCheckedIn:false,actualGrowthEarned:null,nextAvailableAt:null,businessTimezone:null,businessDate:null,checkinReward:null,checkinStatus:'unavailable',canCheckin:false});
    assert.deepEqual(response.json().points,{accountExists:false,balance:null});
    assert.match(response.json().referral.shareUrl,new RegExp(`^https://t\\.me/${f.bot.username}\\?start=ref_`));
   }

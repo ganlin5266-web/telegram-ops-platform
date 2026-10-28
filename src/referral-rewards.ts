@@ -47,6 +47,10 @@ const referralRewardAllowedScopes = () => {
   }
 };
 
+/** Display-only gate; never grants eligibility to an unknown future invitee. */
+export const referralRewardUserScopeEnabled = (scope: ReferralRewardScope, userId: string) =>
+  referralRewardAllowedScopes()?.get(scopeKey(scope))?.has(userId) === true;
+
 export const referralRewardScopeEnabled = (scope: ReferralRewardScope) =>
   referralRewardAllowedScopes()?.has(scopeKey(scope)) === true;
 

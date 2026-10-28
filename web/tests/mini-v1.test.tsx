@@ -165,3 +165,30 @@ describe("Mini V1 client", () => {
     expect(send).toHaveBeenCalledTimes(2);
   });
 });
+
+it("P0 platform filtering adds only platformId to reads and preserves safe business errors", async () => {
+  const send = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async () => reply({ items: [] }));
+  const c = createClient(send);
+  await c.home("platform-one");
+  await c.page("referrals", "cursor-one", "platform-one");
+  await c.redemptionTiers("platform-one");
+  expect(send.mock.calls.map(([path]) => path)).toEqual([
+    "/v1/mini/home?platformId=platform-one",
+    "/v1/mini/referrals?cursor=cursor-one&platformId=platform-one",
+    "/v1/mini/redemption-tiers?platformId=platform-one",
+  ]);
+  const bad = createClient(
+    vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        reply({ error: "inventory_empty", requestId: "safe" }, 409),
+      ),
+  );
+  await expect(bad.createRedemption("rule", "once")).rejects.toMatchObject({
+    kind: "conflict",
+    code: "inventory_empty",
+    requestId: "safe",
+  });
+});

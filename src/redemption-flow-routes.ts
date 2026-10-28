@@ -29,8 +29,11 @@ export function attachMiniRedemptions(
       req.headers.origin,
     );
   app.get("/redemption-tiers", async (req) => {
-    none.parse(req.query);
-    return redemptionCatalogue(db, await auth(req));
+    const q = z
+      .object({ platformId: z.uuid().optional() })
+      .strict()
+      .parse(req.query);
+    return redemptionCatalogue(db, await auth(req), q.platformId);
   });
   app.post("/redemption-orders", async (req) => {
     none.parse(req.query);
