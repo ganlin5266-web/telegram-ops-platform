@@ -48,6 +48,10 @@ export function MiniApp({
     [device, setDevice] = useState<Locale | undefined>(() =>
       readPreference(miniBrand.preferenceKey),
     );
+  // A navigation hint never selects identity/scope; Telegram authentication still does.
+  const inviteEntry = useRef(
+    new URLSearchParams(window.location.search).get("view") === "invite",
+  );
   const version = useRef(0);
   const panelRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -85,6 +89,17 @@ export function MiniApp({
       if (!client.connected)
         await client.connect(window.Telegram?.WebApp?.initData ?? "");
       setHome(await client.home(platformId));
+      if (inviteEntry.current) {
+        const invitations = await client.page(
+          "referrals",
+          undefined,
+          platformId,
+        );
+        setTab("invite");
+        setKind("referrals");
+        setPage(invitations);
+        inviteEntry.current = false;
+      }
     });
   useEffect(() => {
     window.Telegram?.WebApp?.ready?.();

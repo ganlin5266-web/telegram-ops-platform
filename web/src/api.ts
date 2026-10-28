@@ -7,6 +7,14 @@ export class ApiError extends Error {
   }
 }
 export function message(status: number, code = ""): string {
+  if (code === "bot_content_storage_unavailable")
+    return "Bot 内容发布尚缺数据库最小写权限，请联系管理员完成上线审批";
+  if (code === "bot_content_mini_unavailable")
+    return "当前 Bot 尚未配置可信 Mini 入口，暂不能发布";
+  if (code === "bot_content_draft_required")
+    return "请先保存草稿，再预览并发布";
+  if (code === "bot_content_version_conflict")
+    return "内容已被其他管理员修改，请刷新后重新预览";
   if ([502, 503, 504].includes(status) || code === "service_timeout")
     return "服务暂时无法连接，可能正在启动。请稍候后重新连接";
   if (code === "entitlement_metric_semantics_unapproved")

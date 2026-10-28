@@ -1,3 +1,5 @@
+import BotContent from "./operations/BotContent";
+import OperationsMetrics from "./operations/OperationsMetrics";
 import { MemberAdmin } from "./product/MemberAdmin";
 import Dashboard from "./product/Dashboard";
 import RuntimeOps from "./product/ops/RuntimeOps";
@@ -9,12 +11,7 @@ import {
 } from "./product/Spaces";
 import { productCopy } from "./product/copy";
 import type { DataDomain } from "./product/ops/OpsCenter";
-import {
-  AdminSidebar,
-  DomainLanding,
-  domainOf,
-  useSideMode,
-} from "./product/ops/nav";
+import { AdminSidebar, domainOf, useSideMode } from "./product/ops/nav";
 import Entitlements from "./entitlements/Entitlements";
 import PointExpiry from "./point-expiry/PointExpiry";
 import DailyData from "./platform-data/DailyData";
@@ -604,40 +601,56 @@ export default function App() {
           </div>
           {page === "overview" || page === "data" ? (
             bot && !loading && !scopeError ? (
-              <RuntimeOps
-                key={base + page}
-                base={base}
-                brandId={brand}
-                permissions={permissions}
-                onExpire={expire}
-                mode={page === "overview" ? "overview" : "data"}
-                scopeLabel={{
-                  brand: currentBrand?.name || brand,
-                  bot: currentBot?.name || bot,
-                }}
-                domain={dataDomain}
-                onDomain={setDataDomain}
-                onNavigate={(t) => {
-                  if (t.startsWith("data:")) {
-                    setDataDomain(t.slice(5) as DataDomain);
-                    setPage("data");
-                  } else if (
-                    [
-                      "users",
-                      "membership",
-                      "identities",
-                      "daily-data",
-                      "entitlements",
-                    ].includes(t)
-                  ) {
-                    setPage(t);
-                    clearDetails();
-                  }
-                }}
-              />
+              <>
+                <OperationsMetrics
+                  key={base + "metrics"}
+                  base={base}
+                  permissions={permissions}
+                  onExpire={expire}
+                />
+                <RuntimeOps
+                  key={base + page}
+                  base={base}
+                  brandId={brand}
+                  permissions={permissions}
+                  onExpire={expire}
+                  mode={page === "overview" ? "overview" : "data"}
+                  scopeLabel={{
+                    brand: currentBrand?.name || brand,
+                    bot: currentBot?.name || bot,
+                  }}
+                  domain={dataDomain}
+                  onDomain={setDataDomain}
+                  onNavigate={(t) => {
+                    if (t.startsWith("data:")) {
+                      setDataDomain(t.slice(5) as DataDomain);
+                      setPage("data");
+                    } else if (
+                      [
+                        "users",
+                        "membership",
+                        "identities",
+                        "daily-data",
+                        "entitlements",
+                      ].includes(t)
+                    ) {
+                      setPage(t);
+                      clearDetails();
+                    }
+                  }}
+                />
+              </>
             ) : null
           ) : page === "content" ? (
-            <DomainLanding kind="content" />
+            bot && !loading && !scopeError ? (
+              <BotContent
+                key={base}
+                base={base}
+                permissions={permissions}
+                csrf={me.csrfToken}
+                onExpire={expire}
+              />
+            ) : null
           ) : page === "points" ? (
             bot && !loading && !scopeError ? (
               <Dashboard
@@ -654,14 +667,37 @@ export default function App() {
             page === "membership" ? (
               <MemberAdmin brandId={brand} csrf={me.csrfToken} />
             ) : page === "activities" && bot && !loading && !scopeError ? (
-              <ReferralCampaigns
-                key={brand + bot}
-                brandBase={`/v1/brands/${brand}`}
-                botBase={base}
-                permissions={permissions}
-                csrf={me.csrfToken}
-                onExpire={expire}
-              />
+              <>
+                <section className="panel">
+                  <h2>七天试运营</h2>
+                  <p>
+                    邀请活动沿用已发布规则；每日签到发放 Growth，不发
+                    Points。用户首页继续只显示一个推荐操作。
+                  </p>
+                  <div className="product-subnav">
+                    <button onClick={() => setPage("content")}>
+                      Bot 欢迎内容
+                    </button>
+                    <button onClick={() => setPage("membership")}>
+                      会员与签到规则
+                    </button>
+                    <button onClick={() => setPage("redemptions")}>
+                      兑换档位与库存
+                    </button>
+                  </div>
+                  <p className="muted">
+                    未开放任务和小游戏不作为可领奖入口。发布活动不会开启奖励总开关。
+                  </p>
+                </section>
+                <ReferralCampaigns
+                  key={brand + bot}
+                  brandBase={`/v1/brands/${brand}`}
+                  botBase={base}
+                  permissions={permissions}
+                  csrf={me.csrfToken}
+                  onExpire={expire}
+                />
+              </>
             ) : (
               <ProductSpace kind={page} />
             )

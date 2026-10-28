@@ -1,0 +1,93 @@
+{
+  "stage": "seven_day_operations_local_acceptance",
+  "base_sha": "b05330a583b836a3661d50850f9f86dcce01465d",
+  "branch": "codex/seven-day-operations",
+  "date": "2026-10-29",
+  "result": "PASS_LOCAL_READY_FOR_REVIEW",
+  "deployment": "NOT_PERFORMED",
+  "tests": {
+    "pg17_targeted": {
+      "pass": 20,
+      "fail": 0,
+      "skip": 0
+    },
+    "pglite_targeted": {
+      "pass": 20,
+      "fail": 0,
+      "skip": 0
+    },
+    "existing_webhook_regression": {
+      "pass": 7,
+      "fail": 0,
+      "skip": 0,
+      "selected_only": true
+    },
+    "frontend_targeted": {
+      "pass": 39,
+      "fail": 0,
+      "skip": 0
+    },
+    "browser": {
+      "pass": 3,
+      "fail": 0,
+      "skip": 0,
+      "real_local_admin_api": 2,
+      "synthetic_mini_navigation_contract": 1
+    },
+    "backend_build": "PASS",
+    "frontend_typescript_build": "PASS",
+    "bundle_scan": {
+      "files": 11,
+      "findings": 0
+    },
+    "secret_scan": {
+      "findings": 0
+    },
+    "admin_integration_regression": {
+      "pass": 89,
+      "fail": 0,
+      "skip": 0
+    }
+  },
+  "fixed_during_acceptance": [
+    "PostgreSQL window microseconds must not be truncated to JavaScript milliseconds",
+    "New Bot buttons must target actual /mini.html entry, not Admin fallback /mini/"
+  ],
+  "staging_mutations": false,
+  "migration_changes": false,
+  "new_secrets": false,
+  "reward_or_redemption_logic_changed": false,
+  "live_permissions_changed": false,
+  "readiness_blockers": [
+    "Approve template INSERT/UPDATE column grants before content publishing",
+    "Approve code deployment and test Telegram webhook reply delivery",
+    "Confirm five-language welcome copy, support URL, activities/platform URLs and controlled cohort; rewards remain closed until separate approval"
+  ],
+  "data_boundaries": [
+    "Check-ins pending_collection: existing Brand/Member source cannot attribute originating Bot",
+    "Mini metric counts authentication participants, not DAU/PV",
+    "Qualified metric includes cap-exceeded and excludes unevaluated invites while gate is disabled",
+    "Webhook method response has no delivery receipt; not reported as sent",
+    "No Staging or real Telegram test performed in this development turn"
+  ],
+  "artifacts": {
+    "pg17-targeted-final.log": "3d720bdc64127c316abe2166aaa020250c36582cfb1b6cf53c8dc86d8f3f2c8e",
+    "bot-content-pglite.log": "9a091394db2a1759b0108c52e5fca4006e6893b45f099df1edbaa25fdeb7860f",
+    "metrics-pglite.log": "15f83bbcb83df03bf7486ec473c71b24aabe2eadcfa9d953b8694d3e8714e8ab",
+    "webhook-regression.log": "f7b9b141aef482d66882e0ac7d7923e2e2fe9ac97c916667619f9ba7b5c2bf03",
+    "frontend-final.log": "cf55d1ed15f9c13a549c1ac9e9938b1c31b54b6b72da38e7a3fdd41a7e4192f6",
+    "e2e-final.log": "7acdda20a85a1154494db905a48b150996e549384b271e8f37047cf518b25e3d",
+    "backend-build.log": "1b37ce24229450067995812ab038b640c9957c57f8144a09d81bd746ba1be896",
+    "frontend-build.log": "c4677f3ed91c9b8ccea97d8e0e83865675af0c49f1d22e9f7d429d44e785b87b",
+    "secret-scan.log": "3a6b63fe493e9bd2f571580be56ca4a9eff54a5d65a40ad5da0023a4aea3ae16",
+    "admin-integration.log": "029e7ae9eff5993f21024f0f10b223a1b6d8a6a1f22fdec466d348337cbd23a2"
+  },
+  "push_safety": {
+    "target": "independent feature branch only",
+    "render_services_bound_branch": "main",
+    "evidence": "P0 2026-10-29 dashboard verification; fixed commit deploy leaves auto deploy off; no subsequent configuration changes performed",
+    "github_workflows": "unchanged tests only; no deploy step",
+    "force_push": false,
+    "main_modified": false
+  }
+}

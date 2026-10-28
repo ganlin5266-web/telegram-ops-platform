@@ -1,15 +1,17 @@
+import {botCommandReply} from './bot-content.js';
+import type {MiniConfig} from './mini-auth.js';
 import {z} from 'zod';
 import {timingSafeEqual} from 'node:crypto';
 import {DomainError,one,type Database} from './db.js';
 const actor=z.object({id:z.number().int().positive().safe(),is_bot:z.boolean().optional(),username:z.string().optional(),first_name:z.string().optional(),last_name:z.string().optional(),language_code:z.string().optional()});
-const message=z.object({from:actor.optional(),text:z.string().optional()}).passthrough();
+const message=z.object({from:actor.optional(),text:z.string().optional(),chat:z.object({id:z.number().int().safe(),type:z.string()}).optional()}).passthrough();
 export const updateSchema=z.object({update_id:z.number().int().nonnegative().safe(),message:message.optional(),edited_message:message.optional(),callback_query:z.object({from:actor,data:z.string().optional()}).passthrough().optional(),my_chat_member:z.object({from:actor}).passthrough().optional(),chat_member:z.object({from:actor}).passthrough().optional(),channel_post:z.record(z.string(),z.unknown()).optional()}).passthrough();
 export type SecretProvider=(ref:string)=>string|undefined;
 export function verifySecret(expected:string|undefined,actual:string|undefined) {
  if(!expected||!actual) return false; const a=Buffer.from(expected),b=Buffer.from(actual);
  return a.length===b.length&&timingSafeEqual(a,b);
 }
-export async function handleUpdate(db:Database,botId:string,header:string|undefined,raw:unknown,secrets:SecretProvider) {
+export async function handleUpdate(db:Database,botId:string,header:string|undefined,raw:unknown,secrets:SecretProvider,miniConfig?:MiniConfig) {
  const bot=await one(db,`SELECT b.* FROM telegram_bots b JOIN brands br ON br.id=b.brand_id WHERE b.id=$1 AND b.status='active' AND br.status='active'`,[botId]);
  if(!verifySecret(secrets(bot.webhook_secret_ref),header)) throw new DomainError('unauthorized',401);
  const update=updateSchema.parse(raw);
@@ -23,6 +25,7 @@ export async function handleUpdate(db:Database,botId:string,header:string|undefi
   if(from&&!from.is_bot) {
    const start=update.message?.text?.match(/^\/start(?:@([A-Za-z0-9_]+))?(?:\s+([A-Za-z0-9_-]{1,64}))?\s*$/);
    const isStart=!!start&&(!start[1]||start[1].toLowerCase()===bot.username.toLowerCase());
+   const previous=(await tx.query('SELECT first_started_at FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND telegram_user_id=$3',[bot.brand_id,botId,String(from.id)])).rows[0];
    const user=await one(tx,`INSERT INTO telegram_users(brand_id,bot_id,telegram_user_id,username,first_name,last_name,telegram_language_code,first_started_at)
     VALUES($1,$2,$3,$4,$5,$6,$7,CASE WHEN $8 THEN now() ELSE NULL END)
     ON CONFLICT(bot_id,telegram_user_id) DO UPDATE SET username=EXCLUDED.username,first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,
@@ -32,6 +35,11 @@ export async function handleUpdate(db:Database,botId:string,header:string|undefi
    if(parameter?.startsWith('ref_')) {
     const inviter=(await tx.query('SELECT id FROM telegram_users WHERE brand_id=$1 AND bot_id=$2 AND referral_code=$3',[bot.brand_id,botId,parameter.slice(4)])).rows[0];
     if(inviter&&inviter.id!==user.id) await tx.query(`INSERT INTO referrals(brand_id,bot_id,inviter_id,invitee_id,start_parameter) VALUES($1,$2,$3,$4,$5) ON CONFLICT(bot_id,invitee_id) DO NOTHING`,[bot.brand_id,botId,inviter.id,user.id,parameter]);
+   }
+   const chat=update.message?.chat;
+   if(user.status==='active'&&chat?.type==='private'&&chat.id===from.id&&update.message?.text){
+    const reply=await botCommandReply(tx,{brandId:bot.brand_id,botId},{chatId:chat.id,text:update.message.text,username:bot.username,preferredLanguage:user.preferred_language,telegramLanguage:from.language_code,botLanguage:bot.default_language,isNew:!previous?.first_started_at},miniConfig);
+    if(reply)return {ok:true,duplicate:false,...reply};
    }
   }
   return {ok:true,duplicate:false};

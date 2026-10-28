@@ -46,6 +46,8 @@ await db.query(
     await hashPassword(process.env.UI_TEST_PASSWORD),
   ],
 );
+const contentMiniBindings: import("../../src/mini-auth.js").MiniConfig["bindings"] =
+  [];
 for (const name of ["验收品牌 A", "验收品牌 B"]) {
   const brand = await one(
     db,
@@ -64,6 +66,12 @@ for (const name of ["验收品牌 A", "验收品牌 B"]) {
       "INSERT INTO telegram_bots(brand_id,name,username,token_secret_ref,webhook_secret_ref,default_language,supported_languages,status) VALUES($1,$2,$3,$4,$5,'pt-BR',ARRAY['pt-BR','en'],'active') RETURNING id",
       [brand.id, botName, randomUUID(), randomUUID(), randomUUID()],
     );
+    contentMiniBindings.push({
+      appKey: `isolated-${contentMiniBindings.length}`,
+      botId: String(bot.id),
+      origin: "https://mini.example.test",
+      tokenSecretRef: `ISOLATED_UNUSED_BOT_${contentMiniBindings.length}`,
+    });
     for (let index = 0; index < 51; index++)
       await db.query(
         "INSERT INTO telegram_users(brand_id,bot_id,telegram_user_id,first_name,telegram_language_code) VALUES($1,$2,$3,$4,'zh-CN')",
@@ -129,6 +137,7 @@ const app = createApp(
     sessionSeconds: 28800,
     production: false,
   },
+  { bindings: contentMiniBindings },
 );
 await app.listen({ host: "127.0.0.1", port: 3000 });
 for (const signal of ["SIGTERM", "SIGINT"])

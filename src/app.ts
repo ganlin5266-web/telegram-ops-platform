@@ -1,3 +1,5 @@
+import {attachOperationsMetrics} from './operations-metrics.js';
+import {attachBotContent} from './bot-content.js';
 import {attachMembers} from './member-routes.js';
 import {attachOpsRead} from './ops-read-routes.js';
 import {attachReferralRewards} from './referral-routes.js';
@@ -38,7 +40,7 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  app.post('/webhooks/telegram/:botId',async request=>{
   const {botId}=z.object({botId:z.uuid()}).parse(request.params);
   const header=request.headers['x-telegram-bot-api-secret-token'];
-  return handleUpdate(db,botId,typeof header==='string'?header:undefined,request.body,secrets);
+  return handleUpdate(db,botId,typeof header==='string'?header:undefined,request.body,secrets,miniAuth);
  });
  if(miniAuth) app.register(async mini=>attachMiniAuth(mini,db,secrets,miniAuth,redemptionVault),{prefix:'/v1/mini'});
  // Encapsulation keeps every existing admin route and hook in the same boundary.
@@ -49,12 +51,14 @@ export function createApp(db:Database,secrets:SecretProvider,authenticate:Authen
  if(browserAuth) app.options('/v1/*',async()=>({}));
  const base='/v1/brands/:brandId/bots/:botId';
  attachOperationsQueries(app,db,authenticateRequest);
+ attachOperationsMetrics(app,db,authenticateRequest);
  attachDashboard(app,db,authenticateRequest);
  attachAdminPlatforms(app,db,authenticateRequest);
  attachPlatformData(app,db,authenticateRequest);
  attachPointExpiry(app,db,authenticateRequest);
  attachEntitlements(app,db,authenticateRequest);
  attachMembers(app,db,authenticateRequest);
+ attachBotContent(app,db,authenticateRequest,miniAuth);
  attachOpsRead(app,db,authenticateRequest);
  attachReferralRewards(app,db,authenticateRequest);
  attachAdminRedemptions(app,db,authenticateRequest,redemptionVault);
